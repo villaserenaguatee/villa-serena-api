@@ -197,6 +197,7 @@ public class PagoStripeService {
         pago.setEstado(EstadoPago.APROBADO);
         pago.setAprobadoEn(reloj.instant());
         pago.setStripePaymentIntentId(sesion.paymentIntentId());
+        pagos.saveAndFlush(pago);
 
         Cuenta cuenta = cuentas.findById(pago.getCuentaId()).orElseThrow();
         Reserva reserva = reservas.findById(cuenta.getReservaId()).orElseThrow();
@@ -210,6 +211,9 @@ public class PagoStripeService {
     private void marcarFallido(String sesionId) {
         pagos.bloquearPorSesionStripe(sesionId)
                 .filter(p -> p.getEstado() == EstadoPago.PENDIENTE)
-                .ifPresent(p -> p.setEstado(EstadoPago.FALLIDO));
+                .ifPresent(p -> {
+                    p.setEstado(EstadoPago.FALLIDO);
+                    pagos.saveAndFlush(p);
+                });
     }
 }
