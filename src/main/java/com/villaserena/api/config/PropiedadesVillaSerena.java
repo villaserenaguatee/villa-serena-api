@@ -11,7 +11,11 @@ public record PropiedadesVillaSerena(
         Cors cors,
         Jwt jwt,
         Login login,
-        PrimerAdmin primerAdmin) {
+        PrimerAdmin primerAdmin,
+        String webUrl,
+        Reservas reservas,
+        Stripe stripe,
+        Archivos archivos) {
 
     public record Cors(List<String> origenes) {
     }
@@ -23,5 +27,16 @@ public record PropiedadesVillaSerena(
     }
 
     public record PrimerAdmin(String correo, String nombre, String contrasena) {
+    }
+
+    /** Plazo para pagar una reserva web antes de cancelarla (PAR-06). */
+    public record Reservas(int minutosPago) {
+    }
+
+    public record Stripe(String claveSecreta, String webhookSecreto) {
+    }
+
+    /** URL base del bucket público (fotos del hotel, tipos y menú). */
+    public record Archivos(String urlPublica) {
     }
 }

@@ -48,3 +48,12 @@ villaserena:
     correo: ${ADMIN_EMAIL:}
     nombre: ${ADMIN_NAME:}
     contrasena: ${ADMIN_PASSWORD:}
+  web-url: ${WEB_URL:http://localhost:3000}
+  reservas:
+    # 30 minutos (PAR-06). Para probar puedes bajarlo en tu .env.
+    minutos-pago: ${MINUTOS_PAGO:30}
+  stripe:
+    clave-secreta: ${STRIPE_SECRET_KEY:}
+    webhook-secreto: ${STRIPE_WEBHOOK_SECRET:}
+  archivos:
+    url-publica: ${ARCHIVOS_URL_PUBLICA:http://localhost:9000/villaserena-publico}
