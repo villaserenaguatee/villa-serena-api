@@ -15,7 +15,8 @@ public record PropiedadesVillaSerena(
         String webUrl,
         Reservas reservas,
         Stripe stripe,
-        Archivos archivos) {
+        Archivos archivos,
+        Notificaciones notificaciones) {
 
     public record Cors(List<String> origenes) {
     }
@@ -39,5 +40,13 @@ public record PropiedadesVillaSerena(
 
     /** URL base del bucket público (fotos del hotel, tipos y menú). */
     public record Archivos(String urlPublica) {
+    }
+
+    /**
+     * Correos y Outbox (OBJ-1C). {@code remitente} es el From de los correos;
+     * {@code appDescargaUrl} el enlace del APK que va en la confirmación.
+     */
+    public record Notificaciones(String remitente, String appDescargaUrl, int intentosMaximos, int esperaMinutos,
+            int lote) {
     }
 }

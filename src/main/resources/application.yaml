@@ -18,6 +18,22 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  mail:
+    # Mailpit del Docker local (villa-serena-infra): SMTP sin autenticación.
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USER:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          # Mailpit no usa TLS; en un servidor real se activa con MAIL_STARTTLS=true.
+          auth: ${MAIL_AUTH:false}
+          starttls:
+            enable: ${MAIL_STARTTLS:false}
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
   flyway:
     # Valores de los placeholders de V6__datos_iniciales.sql. Vienen del
     # entorno (.env, fuera de Git); ver .env.example. Sin valor, Flyway falla.
@@ -58,3 +74,13 @@ villaserena:
     url-retorno-app: ${APP_URL_RETORNO:villaserena://pago-resultado}
   archivos:
     url-publica: ${ARCHIVOS_URL_PUBLICA:http://localhost:9000/villaserena-publico}
+  notificaciones:
+    # Remitente de los correos y enlace de descarga de la app (HU-HUE-07 C4).
+    remitente: ${MAIL_FROM:Hotel Villa Serena <no-responder@villaserena.test>}
+    app-descarga-url: ${APP_DOWNLOAD_URL:http://localhost:9000/villaserena-publico/app/villaserena.apk}
+    # Reintentos del Outbox (RN-NOT-003): 5 intentos, esperando 1 minuto más
+    # cada vez (1, 2, 3, 4 minutos) antes de darlos por FALLIDO.
+    intentos-maximos: 5
+    espera-minutos: 1
+    # Cuántos correos pendientes toma cada vuelta del proceso programado.
+    lote: 20
