@@ -49,6 +49,10 @@ public class SecurityConfig {
             "/api/v1/pagos/stripe/webhook",
             "/api/v1/canal/**",
             "/api/v1/app/acceso/**",
+            // El WebSocket se autentica en el mensaje CONNECT, no por HTTP
+            // (ver AutenticacionStomp): aquí solo se permite abrir la conexión.
+            "/ws",
+            "/ws/**",
             "/actuator/health",
             "/actuator/health/**",
             "/actuator/prometheus",

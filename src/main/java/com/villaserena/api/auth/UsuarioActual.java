@@ -29,6 +29,11 @@ public final class UsuarioActual {
         return jwt().getClaimAsString(JwtConfig.CLAIM_ROL);
     }
 
+    /** Área de Mantenimiento y Limpieza; nula en los demás roles. */
+    public static String area() {
+        return jwt().getClaimAsString(JwtConfig.CLAIM_AREA);
+    }
+
     private static Jwt jwt() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth instanceof JwtAuthenticationToken token) {

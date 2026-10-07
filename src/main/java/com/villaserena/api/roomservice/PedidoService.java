@@ -352,9 +352,15 @@ public class PedidoService {
     private record Datos(String nombreHuesped, Long habitacionId, String numero, Integer piso) {
     }
 
-    /** Para quien necesite el pedido sin DTO (el WebSocket, por ejemplo). */
+    /** El pedido con la vista de su dueño y el id del huésped, para la cola privada del WebSocket. */
+    public record PedidoDeSuDueno(long huespedId, PedidoHuesped pedido) {
+    }
+
     @Transactional(readOnly = true)
-    public Optional<Pedido> porId(long pedidoId) {
-        return pedidos.findById(pedidoId);
+    public Optional<PedidoDeSuDueno> paraSuDueno(long pedidoId) {
+        return pedidos.findById(pedidoId)
+                .flatMap(pedido -> reservas.findById(pedido.getReservaId())
+                        .map(reserva -> new PedidoDeSuDueno(reserva.getHuespedId(),
+                                paraHuesped(pedido, reserva.getCodigo()))));
     }
 }
