@@ -2,9 +2,6 @@ spring:
   application:
     name: api
   flyway:
-    # Valores de los placeholders de V6__datos_iniciales.sql. Vienen del
-    # entorno (.env, fuera de Git); ver .env.example. Sin valor, Flyway falla.
-    placeholders:
-      demo_password_hash: ${DEMO_PASSWORD_HASH}
-      canal1_key_hash: ${CANAL1_KEY_HASH}
-      canal2_key_hash: ${CANAL2_KEY_HASH}
+    # Solo el esquema. Los datos ficticios de la demostración (db/demo) se
+    # cargan únicamente con el perfil "demo" (application-demo.yaml).
+    locations: classpath:db/migration
