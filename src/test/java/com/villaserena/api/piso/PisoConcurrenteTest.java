@@ -27,11 +27,13 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.jayway.jsonpath.JsonPath;
 import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
 import com.villaserena.api.notificaciones.HabitacionEventos;
+import com.villaserena.api.notificaciones.SolicitudEventos;
 import com.villaserena.api.reservas.stripe.PasarelaStripe;
 
 /**
@@ -66,6 +68,9 @@ class PisoConcurrenteTest {
     @MockitoBean
     HabitacionEventos eventos;
 
+    @MockitoBean
+    SolicitudEventos eventosSolicitud;
+
     long habitacion;
     long historialPrevio;
 
@@ -77,6 +82,11 @@ class PisoConcurrenteTest {
 
     @AfterEach
     void limpiar() {
+        jdbc.update("DELETE FROM solicitudes WHERE habitacion_id = ?", habitacion);
+        jdbc.update("DELETE FROM reservas WHERE codigo = 'VS-SOLIC1'");
+        jdbc.update("DELETE FROM refresh_tokens WHERE huesped_id IN "
+                + "(SELECT id FROM huespedes WHERE correo = 'solicitud@correo.test')");
+        jdbc.update("DELETE FROM huespedes WHERE correo = 'solicitud@correo.test'");
         jdbc.update("DELETE FROM incidencias WHERE habitacion_id = ?", habitacion);
         jdbc.update("DELETE FROM historial_estados WHERE id > ?", historialPrevio);
         jdbc.update("UPDATE habitaciones SET condicion = 'LIMPIA', limpieza_empleado_id = NULL WHERE id = ?",
@@ -120,6 +130,44 @@ class PisoConcurrenteTest {
                 + "AND id_entidad = ? AND estado_nuevo = 'EN_PROCESO'", Integer.class, id)).isEqualTo(1);
         // Tomar no cambia la habitación: no hay evento 4.
         verify(eventos, never()).habitacionCambio(Mockito.anyLong());
+    }
+
+    @Test
+    void laSolicitudNuevaPublicaElEvento3YSoloUnEmpleadoLaToma() throws Exception {
+        long huesped = jdbc.queryForObject("""
+                INSERT INTO huespedes
+                    (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                VALUES ('Solicitud', 'solicitud@correo.test', '1', 'Guatemalteca', 'DPI', '1') RETURNING id""",
+                Long.class);
+        jdbc.update("""
+                INSERT INTO reservas (codigo, huesped_id, tipo_habitacion_id, habitacion_id, fecha_entrada,
+                                      fecha_salida, numero_huespedes, estado, canal, total)
+                SELECT 'VS-SOLIC1', ?, tipo_habitacion_id, id, '2026-10-04', '2026-10-06', 1, 'EN_ESTADIA',
+                       'RECEPCION', 100.00
+                FROM habitaciones WHERE id = ?""", huesped, habitacion);
+        String respuesta = mvc.perform(post("/api/v1/app/reservas/VS-SOLIC1/solicitudes/limpieza")
+                        .header("Authorization", tokenHuesped(huesped)))
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(respuesta, "$.id")).longValue();
+        verify(eventosSolicitud, timeout(2000).times(1)).solicitudNueva(id);
+
+        List<MockHttpServletResponse> respuestas = aLaVez("/api/v1/limpieza/solicitudes/" + id + "/tomar",
+                token("luis.garcia@villaserena.test"), token("pedro.coy@villaserena.test"));
+        assertThat(respuestas).extracting(MockHttpServletResponse::getStatus).containsExactlyInAnyOrder(200, 409);
+        String aCargo = jdbc.queryForObject("""
+                SELECT e.nombre_completo FROM solicitudes s JOIN empleados e ON e.id = s.empleado_id
+                WHERE s.id = ?""", String.class, id);
+        assertThat(respuestas.stream().filter(r -> r.getStatus() == 409).findFirst().orElseThrow()
+                .getContentAsString()).contains("SOLICITUD_TOMADA").contains(aCargo);
+    }
+
+    private String tokenHuesped(long id) {
+        reloj.fijar(Instant.now());
+        try {
+            return "Bearer " + tokens.emitirParaHuesped(id).accessToken();
+        } finally {
+            reloj.reiniciar();
+        }
     }
 
     /** Envía la misma petición con dos tokens al mismo tiempo. */
