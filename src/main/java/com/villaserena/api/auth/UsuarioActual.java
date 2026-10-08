@@ -1,5 +1,7 @@
 package com.villaserena.api.auth;
 
+import java.util.Optional;
+
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -27,6 +29,12 @@ public final class UsuarioActual {
 
     public static String rol() {
         return jwt().getClaimAsString(JwtConfig.CLAIM_ROL);
+    }
+
+    /** Área de Mantenimiento/Limpieza; vacía para los demás roles. */
+    public static Optional<AreaMyl> area() {
+        String area = jwt().getClaimAsString(JwtConfig.CLAIM_AREA);
+        return area == null ? Optional.empty() : Optional.of(AreaMyl.valueOf(area));
     }
 
     private static Jwt jwt() {

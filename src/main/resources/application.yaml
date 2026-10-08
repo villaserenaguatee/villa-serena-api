@@ -1,6 +1,12 @@
 spring:
   application:
     name: api
+  servlet:
+    multipart:
+      # Las imágenes admiten hasta 5 MiB (se valida en el servicio con un mensaje
+      # claro); este tope solo corta subidas mucho mayores.
+      max-file-size: 10MB
+      max-request-size: 11MB
   config:
     # Lee el .env de la raíz del repositorio (fuera de Git) como archivo
     # .properties. Si no existe, se usan las variables del entorno.
@@ -80,6 +86,13 @@ villaserena:
     url-retorno-app: ${APP_URL_RETORNO:villaserena://pago-resultado}
   archivos:
     url-publica: ${ARCHIVOS_URL_PUBLICA:http://localhost:9000/villaserena-publico}
+    # MinIO del Docker local (villa-serena-infra), mismas variables que su .env.
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    usuario: ${MINIO_ROOT_USER:villaserena}
+    contrasena: ${MINIO_ROOT_PASSWORD:}
+    bucket-privado: ${MINIO_BUCKET_PRIVATE:villaserena-privado}
+    # Vigencia de la URL firmada de las fotos privadas (incidencias).
+    minutos-url-firmada: 10
   notificaciones:
     # Remitente de los correos y enlace de descarga de la app (HU-HUE-07 C4).
     remitente: ${MAIL_FROM:Hotel Villa Serena <no-responder@villaserena.test>}
