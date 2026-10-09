@@ -33,7 +33,8 @@ public record PropiedadesVillaSerena(
     public record Reservas(int minutosPago) {
     }
 
-    public record Stripe(String claveSecreta, String webhookSecreto) {
+    /** {@code urlRetornoApp}: a dónde vuelve Stripe después de pagar el saldo en la app. */
+    public record Stripe(String claveSecreta, String webhookSecreto, String urlRetornoApp) {
     }
 
     /** URL base del bucket público (fotos del hotel, tipos y menú). */

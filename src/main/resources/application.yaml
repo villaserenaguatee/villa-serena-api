@@ -55,5 +55,6 @@ villaserena:
   stripe:
     clave-secreta: ${STRIPE_SECRET_KEY:}
     webhook-secreto: ${STRIPE_WEBHOOK_SECRET:}
+    url-retorno-app: ${APP_URL_RETORNO:villaserena://pago-resultado}
   archivos:
     url-publica: ${ARCHIVOS_URL_PUBLICA:http://localhost:9000/villaserena-publico}
