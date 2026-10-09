@@ -18,9 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 import com.villaserena.api.auth.UsuarioActual;
 import com.villaserena.api.estadia.CheckinService;
 import com.villaserena.api.estadia.HabitacionService;
+import com.villaserena.api.reservas.BusquedaReservasService.FiltroRapido;
+import com.villaserena.api.reservas.BusquedaReservasService.Filtros;
 import com.villaserena.api.reservas.dto.AsignarHabitacionPeticion;
+import com.villaserena.api.reservas.dto.CalendarioReservas;
 import com.villaserena.api.reservas.dto.CancelarReservaPeticion;
+import com.villaserena.api.reservas.dto.HuespedAdicionalPeticion;
+import com.villaserena.api.reservas.dto.HuespedAdicionalVista;
 import com.villaserena.api.reservas.dto.OpcionDisponibleRecepcion;
+import com.villaserena.api.reservas.dto.PaginaReservas;
 import com.villaserena.api.reservas.dto.ReservaDetalle;
 import com.villaserena.api.reservas.dto.ReservaRecepcionPeticion;
 import com.villaserena.api.reservas.dto.TipoHabitacionReferencia;
@@ -29,9 +35,9 @@ import com.villaserena.api.reservas.dto.VistaPreviaCancelacion;
 import jakarta.validation.Valid;
 
 /**
- * Reservas de Recepción: disponibilidad, crear, cancelar y check-in
- * (HU-REC-03, 04, 05 y 12) y asignar la habitación (HU-REC-07, OBJ-2C). La búsqueda,
- * el Gantt y el detalle son de Josué.
+ * Reservas de Recepción: disponibilidad, crear, cancelar y check-in (HU-REC-03, 04,
+ * 05 y 12), asignar la habitación (HU-REC-07, OBJ-2C), y búsqueda, detalle, Gantt y
+ * huéspedes adicionales (HU-REC-02, 06, 08 y HU-CM-02, OBJ-2A).
  */
 @RestController
 @RequestMapping("/api/v1/reservas")
@@ -44,16 +50,49 @@ public class RecepcionReservasController {
     private final CancelacionService cancelacion;
     private final CheckinService checkin;
     private final HabitacionService habitaciones;
+    private final BusquedaReservasService busqueda;
+    private final HuespedAdicionalService adicionales;
 
     public RecepcionReservasController(DisponibilidadService disponibilidad, ReservaService reservas,
             ReservaDetalleService detalle, CancelacionService cancelacion, CheckinService checkin,
-            HabitacionService habitaciones) {
+            HabitacionService habitaciones, BusquedaReservasService busqueda,
+            HuespedAdicionalService adicionales) {
         this.disponibilidad = disponibilidad;
         this.reservas = reservas;
         this.detalle = detalle;
         this.cancelacion = cancelacion;
         this.checkin = checkin;
         this.habitaciones = habitaciones;
+        this.busqueda = busqueda;
+        this.adicionales = adicionales;
+    }
+
+    @GetMapping
+    public PaginaReservas buscar(@RequestParam(required = false) String texto,
+            @RequestParam(required = false) String codigo, @RequestParam(required = false) LocalDate desde,
+            @RequestParam(required = false) LocalDate hasta, @RequestParam(required = false) EstadoReserva estado,
+            @RequestParam(required = false) CanalReserva canal, @RequestParam(required = false) FiltroRapido rapido,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+        return busqueda.buscar(new Filtros(texto, codigo, desde, hasta, estado, canal, rapido), page, size);
+    }
+
+    @GetMapping("/calendario")
+    public CalendarioReservas calendario(@RequestParam LocalDate desde, @RequestParam LocalDate hasta) {
+        return busqueda.calendario(desde, hasta);
+    }
+
+    @GetMapping("/{codigo}")
+    public ReservaDetalle detalle(@PathVariable String codigo) {
+        ReservaService.validarCodigo(codigo);
+        return detalle.porCodigo(codigo);
+    }
+
+    @PostMapping("/{codigo}/huespedes-adicionales")
+    @ResponseStatus(HttpStatus.CREATED)
+    public HuespedAdicionalVista agregarHuespedAdicional(@PathVariable String codigo,
+            @Valid @RequestBody HuespedAdicionalPeticion p) {
+        ReservaService.validarCodigo(codigo);
+        return adicionales.agregar(codigo, p);
     }
 
     @GetMapping("/disponibilidad")
