@@ -14,6 +14,9 @@ import com.villaserena.api.auth.dto.LoginPeticion;
 import com.villaserena.api.auth.dto.RefreshPeticion;
 import com.villaserena.api.auth.dto.SesionEmpleado;
 import com.villaserena.api.auth.dto.Tokens;
+import com.villaserena.api.config.JwtConfig;
+import com.villaserena.api.tiemporeal.WsTicketService;
+import com.villaserena.api.tiemporeal.dto.WsTicket;
 
 import jakarta.validation.Valid;
 
@@ -25,9 +28,23 @@ public class AuthController {
     private static final String PERSONAL = "hasAnyRole('ADMIN','RECEPCION','ROOM_SERVICE','MANTENIMIENTO_LIMPIEZA')";
 
     private final AuthService authService;
+    private final WsTicketService wsTickets;
 
-    public AuthController(AuthService authService) {
+    public AuthController(AuthService authService, WsTicketService wsTickets) {
         this.authService = authService;
+        this.wsTickets = wsTickets;
+    }
+
+    /**
+     * Ticket de un uso y 60 segundos para abrir el WebSocket (x-websocket del
+     * contrato). Lo pide el BFF con la sesión del empleado, porque el navegador
+     * nunca recibe el JWT. No se emite con contraseña temporal: el filtro
+     * correspondiente ya responde 403 antes de llegar aquí.
+     */
+    @PostMapping("/ws-ticket")
+    @PreAuthorize(PERSONAL)
+    public WsTicket wsTicket() {
+        return wsTickets.emitir(UsuarioActual.id(), UsuarioActual.rol(), UsuarioActual.area());
     }
 
     @PostMapping("/login")
