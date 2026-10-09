@@ -51,7 +51,7 @@ public record PropiedadesVillaSerena(
      * Correos y Outbox (OBJ-1C). {@code remitente} es el From de los correos;
      * {@code appDescargaUrl} el enlace del APK que va en la confirmación.
      */
-    public record Notificaciones(String remitente, String appDescargaUrl, int intentosMaximos, int esperaMinutos,
-            int lote) {
+    public record Notificaciones(String remitente, String appDescargaUrl, String expoPushUrl, int intentosMaximos,
+            int esperaMinutos, int lote) {
     }
 }

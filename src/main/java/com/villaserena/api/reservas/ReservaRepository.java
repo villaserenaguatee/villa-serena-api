@@ -12,6 +12,9 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
 
     boolean existsByCodigo(String codigo);
 
+    /** Si el correo del huésped tiene alguna reserva (acceso a la app, HU-HUE-08). */
+    boolean existsByHuespedId(Long huespedId);
+
     Optional<Reserva> findByCanalAndIdentificadorExterno(CanalReserva canal, String identificadorExterno);
 
     List<Reserva> findByEstadoAndCanalAndCreadaEnBefore(EstadoReserva estado, CanalReserva canal, Instant limite);
