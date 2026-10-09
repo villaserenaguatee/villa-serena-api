@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<!--
+  Correo de confirmación de reserva (HU-HUE-07). Los datos los encola
+  ConfirmacionReservaService. Es HTML sencillo y con estilos en línea porque los
+  clientes de correo no soportan hojas de estilo externas.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Reserva confirmada</title>
+</head>
+<body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#27272a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;">
+    <tr>
+        <td style="padding:24px;background:#0f766e;border-radius:8px 8px 0 0;">
+            <h1 style="margin:0;font-size:20px;color:#ffffff;">Hotel Villa Serena</h1>
+            <p style="margin:4px 0 0;font-size:14px;color:#ccfbf1;">Antigua Guatemala</p>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:24px;">
+            <p style="margin:0 0 16px;font-size:16px;">
+                Hola <span th:text="${nombreHuesped}">Nombre del huésped</span>, tu reserva quedó confirmada.
+            </p>
+
+            <p style="margin:0 0 24px;font-size:14px;">
+                Tu código de reserva es
+                <strong style="font-size:18px;letter-spacing:1px;" th:text="${codigo}">VS-XXXXXX</strong>.
+                Guárdalo: lo necesitas al llegar al hotel.
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="font-size:14px;border-collapse:collapse;">
+                <tr>
+                    <td style="border-bottom:1px solid #e4e4e7;">Entrada</td>
+                    <td style="border-bottom:1px solid #e4e4e7;text-align:right;">
+                        <span th:text="${entrada}">fecha de entrada</span>
+                        a partir de las <span th:text="${horaCheckin}">15:00</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="border-bottom:1px solid #e4e4e7;">Salida</td>
+                    <td style="border-bottom:1px solid #e4e4e7;text-align:right;">
+                        <span th:text="${salida}">fecha de salida</span>
+                        antes de las <span th:text="${horaCheckout}">12:00</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="border-bottom:1px solid #e4e4e7;">Noches</td>
+                    <td style="border-bottom:1px solid #e4e4e7;text-align:right;" th:text="${noches}">2</td>
+                </tr>
+                <tr>
+                    <td style="border-bottom:1px solid #e4e4e7;">Habitación</td>
+                    <td style="border-bottom:1px solid #e4e4e7;text-align:right;" th:text="${tipoHabitacion}">Tipo de habitación</td>
+                </tr>
+                <tr>
+                    <td style="border-bottom:1px solid #e4e4e7;">Huéspedes</td>
+                    <td style="border-bottom:1px solid #e4e4e7;text-align:right;" th:text="${numeroHuespedes}">2</td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Total</td>
+                    <td style="text-align:right;font-weight:bold;" th:text="${total}">Q 0.00</td>
+                </tr>
+            </table>
+
+            <p th:if="${pagado}" style="margin:24px 0 0;padding:12px;background:#ecfdf5;border-left:4px solid #0f766e;font-size:14px;">
+                El total ya está pagado. En el hotel no tienes que pagar el alojamiento;
+                solo lo que consumas durante tu estadía.
+            </p>
+            <p th:unless="${pagado}" style="margin:24px 0 0;padding:12px;background:#fffbeb;border-left:4px solid #d97706;font-size:14px;">
+                El total se paga al hacer el check-out, junto con lo que consumas
+                durante tu estadía.
+            </p>
+
+            <h2 style="margin:32px 0 8px;font-size:16px;">Tu estadía desde el celular</h2>
+            <p style="margin:0 0 16px;font-size:14px;">
+                Con la app puedes ver tu cuenta, pedir al Room Service y solicitar limpieza.
+                Entra con este mismo correo
+                (<span th:text="${correo}">correo@ejemplo.com</span>): te enviaremos un
+                código para ingresar, sin contraseñas.
+            </p>
+            <p style="margin:0;">
+                <a th:href="${appDescargaUrl}" style="display:inline-block;padding:12px 20px;background:#0f766e;color:#ffffff;text-decoration:none;border-radius:6px;font-size:14px;">
+                    Descargar la app para Android
+                </a>
+            </p>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:16px 24px;background:#fafafa;border-radius:0 0 8px 8px;font-size:12px;color:#71717a;">
+            Este correo se envía automáticamente; no hace falta responderlo.
+            Si necesitas cambiar o cancelar tu reserva, comunícate con Recepción.
+        </td>
+    </tr>
+</table>
+</body>
+</html>
