@@ -18,8 +18,9 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      # Las tablas las crea Flyway (Josué); Hibernate no las toca.
-      ddl-auto: none
+      # Las tablas las crea Flyway; Hibernate no las toca, solo comprueba que las
+      # entidades correspondan al esquema y falla al arrancar si algo no cuadra.
+      ddl-auto: validate
     properties:
       hibernate:
         jdbc:
@@ -46,6 +47,9 @@ spring:
     # "demo" (application-demo.yaml) y "test" (application-test.yaml). Así una
     # configuración de producción arranca sin conocer ningún secreto de demo.
     locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:8080}
 
 management:
   endpoints:
