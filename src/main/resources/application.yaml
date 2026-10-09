@@ -95,6 +95,9 @@ villaserena:
   notificaciones:
     # Remitente de los correos y enlace de descarga de la app (HU-HUE-07 C4).
     remitente: ${MAIL_FROM:Hotel Villa Serena <no-responder@villaserena.test>}
+    # API de Expo para las push de la app (HU-HUE-17). En las pruebas se apunta
+    # a un servidor local.
+    expo-push-url: ${EXPO_PUSH_URL:https://exp.host/--/api/v2/push/send}
     app-descarga-url: ${APP_DOWNLOAD_URL:http://localhost:9000/villaserena-publico/app/villaserena.apk}
     # Reintentos del Outbox (RN-NOT-003): 5 intentos, esperando 1 minuto más
     # cada vez (1, 2, 3, 4 minutos) antes de darlos por FALLIDO.

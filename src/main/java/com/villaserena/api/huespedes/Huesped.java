@@ -43,6 +43,17 @@ public class Huesped {
     @Column(name = "numero_documento", nullable = false)
     private String numeroDocumento;
 
+    /** Intentos fallidos seguidos del código de acceso (PAR-15). */
+    @Column(name = "otp_intentos_fallidos", nullable = false)
+    private int otpIntentosFallidos;
+
+    @Column(name = "otp_bloqueado_hasta")
+    private Instant otpBloqueadoHasta;
+
     @Column(name = "creado_en", insertable = false, updatable = false)
     private Instant creadoEn;
+
+    public boolean otpBloqueado(Instant ahora) {
+        return otpBloqueadoHasta != null && otpBloqueadoHasta.isAfter(ahora);
+    }
 }

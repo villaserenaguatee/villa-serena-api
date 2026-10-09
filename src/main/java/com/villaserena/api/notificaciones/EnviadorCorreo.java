@@ -86,6 +86,15 @@ public class EnviadorCorreo implements EnviadorNotificacion {
             String asunto(Map<String, Object> datos) {
                 return "Tu factura " + datos.get("serieNumero") + " — Hotel Villa Serena";
             }
+        },
+
+        CODIGO_ACCESO("correo/codigo-acceso") {
+            @Override
+            String asunto(Map<String, Object> datos) {
+                // El código no va en el asunto: se ve en la notificación del
+                // teléfono sin abrir el correo.
+                return "Tu código de acceso — Hotel Villa Serena";
+            }
         };
 
         private final String archivo;
@@ -100,7 +109,7 @@ public class EnviadorCorreo implements EnviadorNotificacion {
             return switch (tipo) {
                 case CORREO_CONFIRMACION -> CONFIRMACION;
                 case CORREO_FACTURA -> FACTURA;
-                // OBJ-3A-2 (OTP) agrega aquí su plantilla.
+                case CORREO_OTP -> CODIGO_ACCESO;
                 default -> throw new IllegalStateException("Sin plantilla de correo para " + tipo);
             };
         }

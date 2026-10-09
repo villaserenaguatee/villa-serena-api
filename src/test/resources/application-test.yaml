@@ -8,6 +8,9 @@ CANAL1_KEY_HASH: "9f06c44dd5a80429231bfc26a3334bef28ca9b64345a922aba20ea8eabc50e
 CANAL2_KEY_HASH: "6c1d9490f580587508725dfe3c742c0edb36ffa76e2daaccc54178a92b5a3406"
 JWT_SECRET: dGVzdC1zb2xvLXBhcmEtcHJ1ZWJhcy10ZXN0LXNvbG8tcGFyYS1wcnVlYmFzLTEyMzQ1Njc4OTA=
 ADMIN_EMAIL: ""
+# Las pruebas no llaman a Expo: la URL apunta a un puerto cerrado para poder
+# comprobar que un envío fallido se reintenta.
+EXPO_PUSH_URL: http://localhost:1/push
 
 # Las pruebas trabajan sobre los datos ficticios (empleados, habitaciones,
 # menú y canales), así que cargan db/demo igual que el perfil "demo". El
