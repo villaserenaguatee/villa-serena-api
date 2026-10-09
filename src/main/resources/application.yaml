@@ -35,6 +35,9 @@ spring:
           timeout: 5000
           writetimeout: 5000
   flyway:
+    # Solo el esquema. Los datos ficticios de la demostración (db/demo) se
+    # cargan únicamente con el perfil "demo" (application-demo.yaml).
+    locations: classpath:db/migration
     # Valores de los placeholders de V6__datos_iniciales.sql. Vienen del
     # entorno (.env, fuera de Git); ver .env.example. Sin valor, Flyway falla.
     placeholders:

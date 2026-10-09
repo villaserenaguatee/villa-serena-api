@@ -59,3 +59,42 @@ El validador muestra siete advertencias conocidas:
 | Kim, Alex y Carlos | Copiar el contrato revisado y generar tipos; comprobar que los DTOs corresponden a sus pantallas |
 
 Los nombres de rutas/campos añadidos, `/ws`, `ticket` y los payloads son decisiones de esta propuesta, sujetos a esa revisión. No se enviaron mensajes al equipo, no se marcaron objetivos como terminados y no se anunció un contrato congelado. No se hizo commit ni push de esta rama.
+
+## Verificación al 7 de octubre de 2026 (issue #12)
+
+La propuesta se fusionó en `develop` con el PR #6 y es el **contrato vigente** para los objetivos 0 a 4. El PR #2 (`obj0-contrato-openapi`, solo parte 1) quedó reemplazado: el PR #6 conserva sus 27 rutas sin cambios. El contrato no cambió en esta verificación.
+
+| Criterio de la issue | Estado | Evidencia |
+|---|---|---|
+| 1. Lint sin errores | Cumplido | `npx @redocly/cli@2 lint openapi.yaml`: válido, 0 errores. Las 7 advertencias son las conocidas descritas arriba. |
+| 2. Cada historia con endpoint o nota | Cumplido | Los 68 ID de `villa-serena-docs/04 - Historias de Usuario` coinciden con [COBERTURA_CONTRATO.md](COBERTURA_CONTRATO.md). El cambio del 7 de octubre en las historias es de redacción y no afecta al contrato. |
+| 3. Revisión de API y consumidores | Pendiente | El PR #6 no tiene revisiones de Pablo ni de Hugo. |
+| 4. Tipos generados en web y app | Parcial | Web (`develop`): `openapi.yaml` idéntico y `schema.d.ts` igual al generado con `openapi-typescript` 7.13.0. App (`obj0-development-build`): todavía usa la versión del PR #2; falta copiar el contrato vigente y ejecutar `generate:api`. |
+| 5. Aviso "contrato congelado" | Pendiente | Depende de 3 y 4. Propuesta: al congelar, cambiar `info.version` de `0.2.0-propuesta` a `1.0.0`. |
+
+**Implementación frente al contrato.** Las 25 operaciones que ya implementan los PR apilados #26 → #31 existen en el contrato con el mismo método y ruta; ninguna ruta implementada está fuera del contrato.
+
+| Grupo | Operaciones en el contrato | Implementadas en #26 → #31 |
+|---|---|---|
+| `/admin` | 51 | 0 |
+| `/app` | 23 | 4 |
+| `/archivos` | 1 | 0 |
+| `/auth` | 6 | 5 |
+| `/canal` | 1 | 1 |
+| `/checkout` | 2 | 2 |
+| `/cuentas` | 3 | 3 |
+| `/facturas` | 2 | 0 |
+| `/habitaciones` | 3 | 0 |
+| `/huespedes` | 2 | 0 |
+| `/incidencias` | 5 | 0 |
+| `/limpieza` | 7 | 0 |
+| `/pagos` | 1 | 1 |
+| `/publico` | 7 | 4 |
+| `/reservas` | 10 | 5 |
+| `/room-service` | 6 | 0 |
+| **Total** | **130** | **25** |
+
+**Cambios propuestos con issue propia** (no se incluyen aquí; se decide en cada issue y se integra por PR con los consumidores):
+
+- #28: catálogo mínimo de habitaciones para que Mantenimiento y Limpieza reporten incidencias en cualquier habitación (HU-MYL-06).
+- #7: códigos promocionales en la reserva.
