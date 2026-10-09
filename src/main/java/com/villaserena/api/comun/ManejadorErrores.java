@@ -14,6 +14,9 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /** Convierte las excepciones en el formato único de error del contrato. */
@@ -38,10 +41,18 @@ public class ManejadorErrores {
     }
 
     @ExceptionHandler({HttpMessageNotReadableException.class, MissingServletRequestParameterException.class,
-            MethodArgumentTypeMismatchException.class})
+            MethodArgumentTypeMismatchException.class, MissingServletRequestPartException.class,
+            MultipartException.class})
     ResponseEntity<ErrorRespuesta> peticionMalFormada(Exception e) {
         return ResponseEntity.badRequest()
                 .body(ErrorRespuesta.de("DATOS_INVALIDOS", "Los datos enviados no son válidos."));
+    }
+
+    /** Subidas que superan el tope del servidor (las imágenes se validan antes con un mensaje propio). */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    ResponseEntity<ErrorRespuesta> archivoDemasiadoGrande(MaxUploadSizeExceededException e) {
+        return ResponseEntity.badRequest()
+                .body(ErrorRespuesta.de("ARCHIVO_DEMASIADO_GRANDE", "La imagen no puede superar los 5 MB."));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

@@ -38,8 +38,13 @@ public record PropiedadesVillaSerena(
     public record Stripe(String claveSecreta, String webhookSecreto, String urlRetornoApp) {
     }
 
-    /** URL base del bucket público (fotos del hotel, tipos y menú). */
-    public record Archivos(String urlPublica) {
+    /**
+     * Archivos en MinIO (API S3). {@code urlPublica}: base del bucket público (fotos del
+     * hotel, tipos y menú). El bucket privado guarda las fotos de incidencias, que se
+     * entregan con una URL firmada de {@code minutosUrlFirmada}.
+     */
+    public record Archivos(String urlPublica, String endpoint, String usuario, String contrasena,
+            String bucketPrivado, int minutosUrlFirmada) {
     }
 
     /**
