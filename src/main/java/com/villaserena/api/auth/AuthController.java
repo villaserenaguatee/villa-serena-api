@@ -44,7 +44,10 @@ public class AuthController {
     @PostMapping("/ws-ticket")
     @PreAuthorize(PERSONAL)
     public WsTicket wsTicket() {
-        return wsTickets.emitir(UsuarioActual.id(), UsuarioActual.rol(), UsuarioActual.area());
+        // El área solo la tiene Mantenimiento y Limpieza; el ticket la guarda como
+        // texto porque de ahí sale la autoridad AREA_<area> del WebSocket.
+        return wsTickets.emitir(UsuarioActual.id(), UsuarioActual.rol(),
+                UsuarioActual.area().map(Enum::name).orElse(null));
     }
 
     @PostMapping("/login")
