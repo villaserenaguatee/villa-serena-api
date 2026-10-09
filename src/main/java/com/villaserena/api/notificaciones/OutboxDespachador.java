@@ -54,26 +54,11 @@ public class OutboxDespachador {
         this.lote = Limit.of(config.lote());
     }
 
-    /** Envía los pendientes que ya toca intentar y devuelve cuántos salieron. */
-    public int enviarPendientes() {
-        int enviados = 0;
-        for (Long id : pendientes()) {
-            try {
-                if (procesar(id)) {
-                    enviados++;
-                }
-            } catch (RuntimeException e) {
-                log.warn("No se pudo procesar el aviso {} del outbox: {}", id, e.getMessage());
-            }
-        }
-        return enviados;
-    }
-
     /**
      * Solo los identificadores: así cada aviso se vuelve a leer en su propia
      * transacción y el bloqueo de la lista no se sostiene durante los envíos.
      */
-    @Transactional(readOnly = true)
+    @Transactional // No readOnly: la consulta bloquea las filas (FOR UPDATE SKIP LOCKED).
     public List<Long> pendientes() {
         return outbox.tomarPendientes(reloj.instant(), lote).stream().map(Outbox::getId).toList();
     }

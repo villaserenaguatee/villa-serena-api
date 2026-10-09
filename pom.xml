@@ -83,6 +83,12 @@
 			<version>2.55.0</version>
 		</dependency>
 		<dependency>
+			<!-- PDF de la factura de demostración (OBJ-4B). -->
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>3.0.5</version>
+		</dependency>
+		<dependency>
 			<groupId>org.springdoc</groupId>
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>3.1.0</version>

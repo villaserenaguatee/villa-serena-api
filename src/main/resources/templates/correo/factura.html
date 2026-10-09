@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<!--
+  Correo de la factura (HU-REC-15 / HU-HUE-16). Lo encola FacturaService al emitir la
+  factura en el check-out; el PDF va adjunto (AdjuntoFactura). HTML sencillo con
+  estilos en línea, igual que la confirmación de reserva.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Tu factura</title>
+</head>
+<body style="margin:0;padding:24px;background:#f4f4f5;font-family:Arial,Helvetica,sans-serif;color:#27272a;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:8px;">
+    <tr>
+        <td style="padding:24px;background:#0f766e;border-radius:8px 8px 0 0;">
+            <h1 style="margin:0;font-size:20px;color:#ffffff;">Hotel Villa Serena</h1>
+            <p style="margin:4px 0 0;font-size:14px;color:#ccfbf1;">Antigua Guatemala</p>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:24px;">
+            <p style="margin:0 0 16px;font-size:16px;">
+                Hola <span th:text="${nombreHuesped}">Nombre del huésped</span>, gracias por hospedarte con nosotros.
+            </p>
+            <p style="margin:0 0 24px;font-size:14px;">
+                Te enviamos adjunta la factura de tu estadía (reserva
+                <strong th:text="${codigoReserva}">VS-XXXXXX</strong>).
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="8" cellspacing="0" style="font-size:14px;border-collapse:collapse;">
+                <tr>
+                    <td style="border-bottom:1px solid #e4e4e7;">Factura</td>
+                    <td style="border-bottom:1px solid #e4e4e7;text-align:right;" th:text="${serieNumero}">VS-A 1</td>
+                </tr>
+                <tr>
+                    <td style="border-bottom:1px solid #e4e4e7;">A nombre de</td>
+                    <td style="border-bottom:1px solid #e4e4e7;text-align:right;">
+                        <span th:text="${nombreComprador}">Comprador</span>
+                        (NIT <span th:text="${nit}">CF</span>)
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-weight:bold;">Total</td>
+                    <td style="text-align:right;font-weight:bold;">
+                        <span th:text="${total}">Q 0.00</span>
+                        <span style="font-weight:normal;font-size:12px;">(IVA incluido)</span>
+                    </td>
+                </tr>
+            </table>
+
+            <p style="margin:24px 0 0;padding:12px;background:#fffbeb;border-left:4px solid #d97706;font-size:13px;">
+                Factura de demostración — no válida ante la SAT.
+            </p>
+        </td>
+    </tr>
+    <tr>
+        <td style="padding:16px 24px;background:#fafafa;border-radius:0 0 8px 8px;font-size:12px;color:#71717a;">
+            Este correo se envía automáticamente; no hace falta responderlo.
+        </td>
+    </tr>
+</table>
+</body>
+</html>
