@@ -110,6 +110,12 @@ public class DisponibilidadService {
         return publico(tipo, fotosPorTipo().getOrDefault(tipo.id(), List.of()));
     }
 
+    /** Catálogo público (HU-HUE-02): solo los tipos ACTIVO, con sus fotos (la principal primero). */
+    public List<TipoHabitacionPublico> catalogo() {
+        Map<Long, List<String>> fotos = fotosPorTipo();
+        return tiposActivos().stream().map(t -> publico(t, fotos.getOrDefault(t.id(), List.of()))).toList();
+    }
+
     private static final String SELECT_TIPO = """
             SELECT id, nombre, descripcion, capacidad, precio_base, ajuste_fin_semana_pct, estado
             FROM tipos_habitacion""";
