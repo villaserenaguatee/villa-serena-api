@@ -9,6 +9,7 @@ import java.util.List;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ import com.villaserena.api.comun.HistorialEstadoService;
 import com.villaserena.api.comun.Responsable;
 import com.villaserena.api.comun.TipoEntidadHistorial;
 import com.villaserena.api.huespedes.Huesped;
+import com.villaserena.api.huespedes.HuespedRepository;
 import com.villaserena.api.huespedes.HuespedService;
 import com.villaserena.api.notificaciones.ConfirmacionReservaNotifier;
 import com.villaserena.api.reservas.dto.Cotizacion;
@@ -41,14 +43,16 @@ public class ReservaService {
     private final DisponibilidadService disponibilidad;
     private final TarifaService tarifas;
     private final HuespedService huespedes;
+    private final HuespedRepository huespedesRepo;
     private final HistorialEstadoService historial;
+    private final JdbcTemplate jdbc;
     private final ObjectProvider<ConfirmacionReservaNotifier> notificador;
     private final Clock reloj;
 
     public ReservaService(ReservaRepository reservas, ReservaNocheRepository noches, CuentaRepository cuentas,
             PagoRepository pagos, CargoService cargos, DisponibilidadService disponibilidad, TarifaService tarifas,
-            HuespedService huespedes, HistorialEstadoService historial,
-            ObjectProvider<ConfirmacionReservaNotifier> notificador, Clock reloj) {
+            HuespedService huespedes, HuespedRepository huespedesRepo, HistorialEstadoService historial,
+            JdbcTemplate jdbc, ObjectProvider<ConfirmacionReservaNotifier> notificador, Clock reloj) {
         this.reservas = reservas;
         this.noches = noches;
         this.cuentas = cuentas;
@@ -57,7 +61,9 @@ public class ReservaService {
         this.disponibilidad = disponibilidad;
         this.tarifas = tarifas;
         this.huespedes = huespedes;
+        this.huespedesRepo = huespedesRepo;
         this.historial = historial;
+        this.jdbc = jdbc;
         this.notificador = notificador;
         this.reloj = reloj;
     }
@@ -92,7 +98,10 @@ public class ReservaService {
         boolean externo = solicitud.canal().esExterno();
         Cotizacion cotizacion = externo ? null : tarifas.cotizar(tipo, solicitud.entrada(), solicitud.salida());
         BigDecimal total = externo ? solicitud.montoCanal().setScale(2, RoundingMode.HALF_UP) : cotizacion.total();
-        Huesped huesped = huespedes.obtenerOCrear(solicitud.huesped());
+        Huesped huesped = solicitud.huespedId() != null
+                ? huespedesRepo.findById(solicitud.huespedId()).orElseThrow(() -> new ApiException(
+                        HttpStatus.NOT_FOUND, "NO_ENCONTRADO", "No se encontró el huésped indicado."))
+                : huespedes.obtenerOCrear(solicitud.huesped());
         Instant ahora = reloj.instant();
 
         Reserva reserva = new Reserva();
@@ -111,6 +120,9 @@ public class ReservaService {
         reserva.setCreadaPorEmpleadoId(solicitud.responsable().empleadoId());
         reserva.setCreadaEn(ahora);
         reservas.saveAndFlush(reserva);
+        if (solicitud.habitacionId() != null) {
+            asignarHabitacion(reserva, solicitud.habitacionId(), solicitud.responsable());
+        }
 
         if (!externo) {
             for (PrecioNoche n : cotizacion.desglose()) {
@@ -172,6 +184,52 @@ public class ReservaService {
             cuenta.setEstado(EstadoCuenta.CERRADA);
             cuenta.setCerradaEn(reloj.instant());
         });
+    }
+
+    /**
+     * Asigna o cambia la habitación antes del check-in (RN-RES-013): reserva
+     * PENDIENTE_PAGO o CONFIRMADA, habitación ACTIVO del mismo tipo, que no esté
+     * FUERA_DE_SERVICIO y sin reservas activas traslapadas. No necesita estar limpia.
+     * Lo puede reutilizar el endpoint de asignación de Recepción (HU-REC-07).
+     */
+    @Transactional
+    public void asignarHabitacion(Reserva reserva, long habitacionId, Responsable responsable) {
+        if (reserva.getEstado() != EstadoReserva.PENDIENTE_PAGO && reserva.getEstado() != EstadoReserva.CONFIRMADA) {
+            throw ApiException.conflicto("ESTADO_INVALIDO",
+                    "Solo se asigna habitación antes del check-in, con la reserva pendiente de pago o confirmada.");
+        }
+        HabitacionDatos habitacion = jdbc.query(
+                "SELECT numero, tipo_habitacion_id, estado, condicion FROM habitaciones WHERE id = ? FOR UPDATE",
+                (rs, i) -> new HabitacionDatos(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4)),
+                habitacionId).stream().findFirst()
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NO_ENCONTRADO",
+                        "No se encontró la habitación indicada."));
+        if (habitacion.tipoId() != reserva.getTipoHabitacionId()) {
+            throw ApiException.datosInvalidos("La habitación debe ser del tipo reservado.",
+                    List.of(new DetalleError("habitacionId",
+                            "La habitación " + habitacion.numero() + " es de otro tipo.")));
+        }
+        if (!"ACTIVO".equals(habitacion.estado()) || "FUERA_DE_SERVICIO".equals(habitacion.condicion())) {
+            throw ApiException.conflicto("HABITACION_NO_DISPONIBLE",
+                    "La habitación " + habitacion.numero() + " no está disponible (inactiva o fuera de servicio).");
+        }
+        Integer traslapes = jdbc.queryForObject("""
+                SELECT count(*) FROM reservas
+                WHERE habitacion_id = ? AND id <> ?
+                  AND estado IN ('PENDIENTE_PAGO', 'CONFIRMADA', 'EN_ESTADIA')
+                  AND daterange(fecha_entrada, fecha_salida, '[)') && daterange(?, ?, '[)')""",
+                Integer.class, habitacionId, reserva.getId(), reserva.getFechaEntrada(), reserva.getFechaSalida());
+        if (traslapes != null && traslapes > 0) {
+            throw ApiException.conflicto("HABITACION_OCUPADA",
+                    "La habitación " + habitacion.numero() + " ya está reservada en esas fechas.");
+        }
+        reserva.setHabitacionId(habitacionId);
+        reserva.setHabitacionAsignadaEn(reloj.instant());
+        reserva.setHabitacionAsignadaPorEmpleadoId(responsable.empleadoId());
+        reservas.saveAndFlush(reserva);
+    }
+
+    private record HabitacionDatos(String numero, long tipoId, String estado, String condicion) {
     }
 
     @Transactional(readOnly = true)

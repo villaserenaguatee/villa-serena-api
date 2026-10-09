@@ -8,7 +8,10 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
-/** Reloj fijo para las pruebas: lunes 5 de octubre de 2026, 12:00 en America/Guatemala. */
+/**
+ * Reloj de las pruebas: arranca el lunes 5 de octubre de 2026 a las 12:00 en
+ * America/Guatemala y se puede mover con {@link RelojPrueba#fijar(Instant)}.
+ */
 @TestConfiguration(proxyBeanMethods = false)
 public class RelojFijoConfig {
 
@@ -17,7 +20,35 @@ public class RelojFijoConfig {
 
     @Bean
     @Primary
-    Clock relojFijo() {
-        return Clock.fixed(AHORA, ZONA);
+    RelojPrueba relojPrueba() {
+        return new RelojPrueba();
+    }
+
+    public static class RelojPrueba extends Clock {
+
+        private volatile Instant ahora = AHORA;
+
+        public void fijar(Instant instante) {
+            this.ahora = instante;
+        }
+
+        public void reiniciar() {
+            this.ahora = AHORA;
+        }
+
+        @Override
+        public ZoneId getZone() {
+            return ZONA;
+        }
+
+        @Override
+        public Clock withZone(ZoneId zona) {
+            return Clock.fixed(ahora, zona);
+        }
+
+        @Override
+        public Instant instant() {
+            return ahora;
+        }
     }
 }

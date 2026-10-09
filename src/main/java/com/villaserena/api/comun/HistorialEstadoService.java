@@ -21,11 +21,18 @@ public class HistorialEstadoService {
     @Transactional(propagation = Propagation.MANDATORY)
     public void registrar(TipoEntidadHistorial entidad, long idEntidad, Enum<?> anterior, Enum<?> nuevo,
             Responsable responsable, String motivo) {
+        registrar(entidad, idEntidad, anterior == null ? null : anterior.name(), nuevo.name(), responsable, motivo);
+    }
+
+    /** Variante con los estados como texto (por ejemplo, la ocupación de una habitación: LIBRE, OCUPADA). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void registrar(TipoEntidadHistorial entidad, long idEntidad, String anterior, String nuevo,
+            Responsable responsable, String motivo) {
         jdbc.update("""
                 INSERT INTO historial_estados
                     (tipo_entidad, id_entidad, estado_anterior, estado_nuevo, tipo_responsable, id_responsable, motivo)
                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                entidad.name(), idEntidad, anterior == null ? null : anterior.name(), nuevo.name(),
+                entidad.name(), idEntidad, anterior, nuevo,
                 responsable.tipo().name(), responsable.empleadoId(), motivo);
     }
 }
