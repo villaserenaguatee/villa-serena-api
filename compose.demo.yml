@@ -1,0 +1,64 @@
+# Stack de demostración: PostgreSQL 17 + API (Spring Boot con perfil demo).
+# Permite levantar la base de datos y la API compilada en contenedor desde este repositorio.
+#
+# Requisitos:
+#   1. Tener un archivo .env en la raíz de api (copia de .env.example) con las contraseñas y hashes:
+#        POSTGRES_PASSWORD, JWT_SECRET, DEMO_PASSWORD_HASH, CANAL1_KEY_HASH, CANAL2_KEY_HASH
+#
+# Uso:
+#   docker compose -f compose.demo.yml up -d --build
+#   docker compose -f compose.demo.yml logs -f api
+#   docker compose -f compose.demo.yml down
+
+name: villa-serena-demo
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-villaserena}
+      POSTGRES_USER: ${POSTGRES_USER:-villaserena}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-villaserena}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-villaserena} -d $${POSTGRES_DB:-villaserena}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - villa-serena-net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-demo}
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-villaserena}
+      DB_USER: ${POSTGRES_USER:-villaserena}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-villaserena}
+      JWT_SECRET: ${JWT_SECRET:-dGVzdC1zb2xvLXBhcmEtcHJ1ZWJhcy10ZXN0LXNvbG8tcGFyYS1wcnVlYmFzLTEyMzQ1Njc4OTA=}
+      CORS_ORIGENES: ${CORS_ORIGENES:-http://localhost:3000}
+      WEB_URL: ${WEB_URL:-http://localhost:3000}
+      DEMO_PASSWORD_HASH: ${DEMO_PASSWORD_HASH:-$$2y$$10$$EqZQCedXATrvLDvDyb/.K.WO6cgguZssAVOVY/nKQSTZChxDb5HPq}
+      CANAL1_KEY_HASH: ${CANAL1_KEY_HASH:-9f06c44dd5a80429231bfc26a3334bef28ca9b64345a922aba20ea8eabc50e33}
+      CANAL2_KEY_HASH: ${CANAL2_KEY_HASH:-6c1d9490f580587508725dfe3c742c0edb36ffa76e2daaccc54178a92b5a3406}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - villa-serena-net
+
+volumes:
+  postgres-data:
+
+networks:
+  villa-serena-net:
+    driver: bridge
