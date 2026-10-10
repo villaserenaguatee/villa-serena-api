@@ -1,0 +1,11 @@
+# Lista blanca: se ignora todo y solo se permite lo que el Dockerfile copia
+# (COPY mvnw mvnw.cmd, .mvn, pom.xml y src). Así el contexto de build queda
+# mínimo y un archivo nuevo en la raíz (.env, docs, target/, .git, etc.) nunca
+# llega al daemon ni invalida la caché de capas.
+*
+
+!mvnw
+!mvnw.cmd
+!.mvn/
+!pom.xml
+!src/
