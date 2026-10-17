@@ -134,7 +134,8 @@ public class CheckoutService {
     @Transactional
     public CheckoutResultado hacerCheckout(Reserva reserva, Origen origen, String nit, String nombreComprador,
             PagoRecepcionPeticion pagoRecepcion, boolean aceptaCancelarPedidos, Responsable responsable) {
-        if (reserva.getEstado() != EstadoReserva.EN_ESTADIA) {
+        String estadoBloqueado = jdbc.queryForObject("SELECT estado FROM reservas WHERE id=? FOR UPDATE",String.class,reserva.getId());
+        if (!"EN_ESTADIA".equals(estadoBloqueado) || reserva.getEstado() != EstadoReserva.EN_ESTADIA) {
             throw ApiException.conflicto("ESTADO_INVALIDO", "Solo se puede hacer check-out de reservas en estadía.");
         }
         if (hayPedidoEnCamino(reserva.getId())) {

@@ -29,7 +29,7 @@ import com.villaserena.api.reservas.MetodoPago;
 public class FacturaConsultaService {
 
     /** Prefijo de los PDF en el bucket privado. */
-    static final String PREFIJO_PDF = "facturas/";
+    static final String PREFIJO_PDF = "facturas/presentacion-v2/";
 
     private final JdbcTemplate jdbc;
     private final AlmacenArchivos almacen;
@@ -114,13 +114,26 @@ public class FacturaConsultaService {
      */
     @Transactional
     public DescargaFactura descarga(long id) {
+        String clave = asegurarPdf(id);
+        return new DescargaFactura(almacen.urlFirmada(clave),
+                OffsetDateTime.ofInstant(reloj.instant().plus(vigenciaUrl), reloj.getZone()));
+    }
+
+    /** El correo adjunta los mismos bytes persistidos que descargan Portal y Recepción. */
+    @Transactional
+    public byte[] contenidoPdf(long id) {
+        return almacen.leerPrivado(asegurarPdf(id));
+    }
+
+    private String asegurarPdf(long id) {
         List<String> filas = jdbc.queryForList("SELECT clave_pdf FROM facturas WHERE id = ? FOR UPDATE",
                 String.class, id);
         if (filas.isEmpty()) {
             throw ApiException.noEncontrado();
         }
         String clave = filas.getFirst();
-        if (clave == null) {
+        // Revisión exclusivamente visual: conserva el archivo anterior bajo su clave original.
+        if (clave == null || !clave.startsWith(PREFIJO_PDF)) {
             FacturaDetalle detalle = detalle(id);
             clave = PREFIJO_PDF + nombrePdf(detalle);
             try {
@@ -131,13 +144,12 @@ public class FacturaConsultaService {
             }
             jdbc.update("UPDATE facturas SET clave_pdf = ? WHERE id = ?", clave, id);
         }
-        return new DescargaFactura(almacen.urlFirmada(clave),
-                OffsetDateTime.ofInstant(reloj.instant().plus(vigenciaUrl), reloj.getZone()));
+        return clave;
     }
 
     /** Nombre del archivo, por ejemplo {@code factura-VS-A-1.pdf}. */
     static String nombrePdf(FacturaDetalle f) {
-        return "factura-" + f.serie() + "-" + f.numero() + ".pdf";
+        return "Factura-Villa-Serena-" + f.serie() + "-" + f.numero() + ".pdf";
     }
 
     private OffsetDateTime fecha(Timestamp t) {

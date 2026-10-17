@@ -13,11 +13,9 @@ import com.villaserena.api.notificaciones.TipoNotificacion;
 public class AdjuntoFactura implements ProveedorAdjuntos {
 
     private final FacturaConsultaService facturas;
-    private final FacturaPdf pdf;
 
-    public AdjuntoFactura(FacturaConsultaService facturas, FacturaPdf pdf) {
+    public AdjuntoFactura(FacturaConsultaService facturas) {
         this.facturas = facturas;
-        this.pdf = pdf;
     }
 
     @Override
@@ -28,7 +26,7 @@ public class AdjuntoFactura implements ProveedorAdjuntos {
     @Override
     public List<Adjunto> adjuntos(Map<String, Object> datos) {
         FacturaDetalle factura = facturas.detalle(((Number) datos.get("facturaId")).longValue());
-        return List.of(new Adjunto(FacturaConsultaService.nombrePdf(factura), pdf.generar(factura),
+        return List.of(new Adjunto(FacturaConsultaService.nombrePdf(factura), facturas.contenidoPdf(factura.id()),
                 "application/pdf"));
     }
 }

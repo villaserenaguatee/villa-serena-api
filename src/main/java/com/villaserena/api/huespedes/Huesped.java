@@ -43,6 +43,9 @@ public class Huesped {
     @Column(name = "numero_documento", nullable = false)
     private String numeroDocumento;
 
+    @Column(name = "pais_emisor_pasaporte")
+    private String paisEmisorPasaporte;
+
     /** Intentos fallidos seguidos del código de acceso (PAR-15). */
     @Column(name = "otp_intentos_fallidos", nullable = false)
     private int otpIntentosFallidos;

@@ -90,7 +90,8 @@ public class PagoStripeService {
     @Transactional
     public PagoIniciado iniciarPagoReserva(String codigo) {
         Reserva reserva = reservaService.porCodigo(codigo);
-        if (reserva.getEstado() != EstadoReserva.PENDIENTE_PAGO) {
+        String estadoActual=jdbc.queryForObject("SELECT estado FROM reservas WHERE id=? FOR UPDATE",String.class,reserva.getId());
+        if (!"PENDIENTE_PAGO".equals(estadoActual)) {
             throw ApiException.conflicto("RESERVA_NO_PENDIENTE", "La reserva ya no está pendiente de pago.");
         }
         Cuenta cuenta = cuentas.findByReservaId(reserva.getId()).orElseThrow(ApiException::noEncontrado);
@@ -103,6 +104,9 @@ public class PagoStripeService {
             if (sesion.abierta()) {
                 return new PagoIniciado(sesion.url(), vence);
             }
+            if(sesion.pagada())throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Consulta el estado antes de repetirlo.");
+            pendiente.get().setEstado(EstadoPago.FALLIDO);
+            pagos.saveAndFlush(pendiente.get());
         }
 
         PasarelaStripe.Sesion sesion = stripe.crearSesion(

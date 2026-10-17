@@ -1,119 +1,34 @@
 package com.villaserena.api.facturacion;
-
 import java.awt.Color;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
-
-import org.openpdf.text.Document;
-import org.openpdf.text.Element;
-import org.openpdf.text.Font;
-import org.openpdf.text.FontFactory;
-import org.openpdf.text.PageSize;
-import org.openpdf.text.Paragraph;
-import org.openpdf.text.Phrase;
-import org.openpdf.text.pdf.PdfPCell;
-import org.openpdf.text.pdf.PdfPTable;
-import org.openpdf.text.pdf.PdfWriter;
+import java.time.ZoneId;
+import org.openpdf.text.*;
+import org.openpdf.text.pdf.*;
 import org.springframework.stereotype.Component;
-
-/**
- * PDF de la factura con OpenPDF (HU-REC-15, criterio 4): datos del hotel y fiscales,
- * serie y número, fecha y hora, comprador, reserva, cargos vigentes, total con "IVA
- * incluido" sin desglose, pagos y la leyenda de demostración.
- */
-@Component
-public class FacturaPdf {
-
-    private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
-    private static final Font TITULO = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 14);
-    private static final Font NEGRITA = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9);
-    private static final Font NORMAL = FontFactory.getFont(FontFactory.HELVETICA, 9);
-    private static final Font AVISO = FontFactory.getFont(FontFactory.HELVETICA_OBLIQUE, 8, Color.DARK_GRAY);
-
-    public byte[] generar(FacturaDetalle f) {
-        ByteArrayOutputStream salida = new ByteArrayOutputStream();
-        Document documento = new Document(PageSize.LETTER, 48, 48, 48, 48);
-        PdfWriter.getInstance(documento, salida);
-        documento.addTitle("Factura " + f.serie() + " " + f.numero());
-        documento.open();
-
-        FacturaDetalle.Hotel h = f.hotel();
-        documento.add(new Paragraph(h.nombreComercial(), TITULO));
-        documento.add(new Paragraph(h.razonSocial() + " · NIT " + h.nit(), NORMAL));
-        documento.add(new Paragraph(h.direccionFiscal(), NORMAL));
-        if (h.telefono() != null) {
-            documento.add(new Paragraph("Tel. " + h.telefono() + " · " + h.correo(), NORMAL));
-        }
-
-        Paragraph encabezado = new Paragraph("FACTURA " + f.serie() + " No. " + f.numero(), TITULO);
-        encabezado.setSpacingBefore(12);
-        documento.add(encabezado);
-        documento.add(new Paragraph("Fecha: " + FECHA.format(f.emitidaEn()), NORMAL));
-        documento.add(new Paragraph("Reserva: " + f.codigoReserva(), NORMAL));
-        documento.add(new Paragraph("NIT: " + f.comprador().nit() + " · Nombre: " + f.comprador().nombreComprador(),
-                NORMAL));
-
-        PdfPTable cargos = new PdfPTable(new float[] {6, 1.2f, 2, 2});
-        cargos.setWidthPercentage(100);
-        cargos.setSpacingBefore(12);
-        encabezados(cargos, "Concepto", "Cant.", "Precio", "Monto");
-        for (FacturaDetalle.Cargo c : f.cargos()) {
-            celda(cargos, c.concepto(), NORMAL, Element.ALIGN_LEFT);
-            celda(cargos, String.valueOf(c.cantidad()), NORMAL, Element.ALIGN_RIGHT);
-            celda(cargos, quetzales(c.precioUnitario()), NORMAL, Element.ALIGN_RIGHT);
-            celda(cargos, quetzales(c.monto()), NORMAL, Element.ALIGN_RIGHT);
-        }
-        PdfPCell etiquetaTotal = new PdfPCell(new Phrase("Total (" + FacturaDetalle.LEYENDA_IVA + ")", NEGRITA));
-        etiquetaTotal.setColspan(3);
-        etiquetaTotal.setHorizontalAlignment(Element.ALIGN_RIGHT);
-        cargos.addCell(etiquetaTotal);
-        celda(cargos, quetzales(f.total()), NEGRITA, Element.ALIGN_RIGHT);
-        documento.add(cargos);
-
-        PdfPTable pagos = new PdfPTable(new float[] {6, 2});
-        pagos.setWidthPercentage(60);
-        pagos.setHorizontalAlignment(Element.ALIGN_LEFT);
-        pagos.setSpacingBefore(12);
-        encabezados(pagos, "Pago", "Monto");
-        for (FacturaDetalle.Pago p : f.pagos()) {
-            celda(pagos, metodo(p), NORMAL, Element.ALIGN_LEFT);
-            celda(pagos, quetzales(p.monto()), NORMAL, Element.ALIGN_RIGHT);
-        }
-        documento.add(pagos);
-
-        Paragraph leyenda = new Paragraph(FacturaDetalle.LEYENDA_LEGAL, AVISO);
-        leyenda.setSpacingBefore(18);
-        documento.add(leyenda);
-        documento.close();
-        return salida.toByteArray();
-    }
-
-    private static void encabezados(PdfPTable tabla, String... titulos) {
-        for (String titulo : titulos) {
-            PdfPCell celda = new PdfPCell(new Phrase(titulo, NEGRITA));
-            celda.setBackgroundColor(new Color(0xEE, 0xEE, 0xEE));
-            tabla.addCell(celda);
-        }
-    }
-
-    private static void celda(PdfPTable tabla, String texto, Font fuente, int alineacion) {
-        PdfPCell celda = new PdfPCell(new Phrase(texto, fuente));
-        celda.setHorizontalAlignment(alineacion);
-        tabla.addCell(celda);
-    }
-
-    private static String quetzales(BigDecimal monto) {
-        return "Q " + monto.setScale(2).toPlainString();
-    }
-
-    private static String metodo(FacturaDetalle.Pago p) {
-        return switch (p.metodo()) {
-            case STRIPE -> "Tarjeta en línea (Stripe)";
-            case CANAL -> "Pagado al canal";
-            case EFECTIVO -> "Efectivo";
-            case TARJETA -> "Tarjeta";
-            case OTRO -> "Otro";
-        };
-    }
+/** Presentación tomada de ModalComprobante de CuentaHuesped; solo datos de la factura emitida. */
+@Component public class FacturaPdf {
+ private static final Color NAVY=new Color(0x10,0x27,0x47),GOLD=new Color(0xD8,0xB9,0x4E),CREAM=new Color(0xF3,0xF1,0xEB),LINE=new Color(0xE5,0xE0,0xD8),MUTED=new Color(0x52,0x67,0x7F),GREEN=new Color(0x16,0x65,0x34),PALE=new Color(0xEA,0xF6,0xEC);
+ private static Font normal(){return FontFactory.getFont(FontFactory.HELVETICA,9,NAVY);} private static Font bold(){return FontFactory.getFont(FontFactory.HELVETICA_BOLD,9,NAVY);} private static Font serif(float n){return FontFactory.getFont(FontFactory.TIMES_BOLD,n,NAVY);}
+ public byte[] generar(FacturaDetalle f){
+  var out=new ByteArrayOutputStream();var doc=new Document(PageSize.LETTER,38,38,38,42);var writer=PdfWriter.getInstance(doc,out);
+  writer.setPageEvent(new PdfPageEventHelper(){@Override public void onEndPage(PdfWriter w,Document d){var cb=w.getDirectContent();cb.setColorStroke(GOLD);cb.setLineWidth(.7f);cb.moveTo(d.left(),29);cb.lineTo(d.right(),29);cb.stroke();ColumnText.showTextAligned(cb,Element.ALIGN_LEFT,new Phrase("Villa Serena Hotel",FontFactory.getFont(FontFactory.HELVETICA,8,MUTED)),d.left(),17,0);ColumnText.showTextAligned(cb,Element.ALIGN_RIGHT,new Phrase("Página "+w.getPageNumber(),FontFactory.getFont(FontFactory.HELVETICA,8,MUTED)),d.right(),17,0);}});
+  doc.addTitle("Factura "+f.serie()+"-"+f.numero());doc.addAuthor("Villa Serena Hotel");doc.open();var header=table(1.25f,2.15f,2.05f);header.setKeepTogether(true);var brand=cell("",normal(),Element.ALIGN_CENTER);brand.setVerticalAlignment(Element.ALIGN_MIDDLE);
+  try(var logo=FacturaPdf.class.getResourceAsStream("/correo/villa-serena-logo.png")){if(logo==null)throw new IllegalStateException("Falta el logo original de Villa Serena.");var image=Image.getInstance(logo.readAllBytes());image.scaleToFit(105,100);image.setAlignment(Element.ALIGN_CENTER);brand.addElement(image);}catch(java.io.IOException ex){throw new IllegalStateException("No se pudo leer el logo original.",ex);}header.addCell(brand);
+  var h=f.hotel();var hotel=cell("",normal(),Element.ALIGN_LEFT);hotel.addElement(new Paragraph(value(h.nombreComercial()),serif(15)));for(String line:new String[]{h.razonSocial(),h.direccionFiscal(),"NIT: "+value(h.nit()),h.correo(),h.telefono()})if(line!=null&&!line.isBlank())hotel.addElement(new Paragraph(line,normal()));header.addCell(hotel);
+  var meta=cell("",normal(),Element.ALIGN_LEFT);meta.addElement(new Paragraph("FACTURA",serif(21)));for(String line:new String[]{"Serie: "+f.serie()+"  Número: "+f.numero(),"Reserva: "+f.codigoReserva(),"Emitida: "+DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm").format(f.emitidaEn().atZoneSameInstant(ZoneId.of("America/Guatemala")))})meta.addElement(new Paragraph(line,normal()));header.addCell(meta);doc.add(header);var line=table(1);var lc=cell("",normal(),Element.ALIGN_LEFT);lc.setFixedHeight(8);lc.setBorder(Rectangle.BOTTOM);lc.setBorderColor(GOLD);lc.setBorderWidth(.7f);line.addCell(lc);doc.add(line);
+  var paid=f.pagos().stream().map(FacturaDetalle.Pago::monto).reduce(BigDecimal.ZERO,BigDecimal::add);var balance=f.total().subtract(paid);var buyer=table(3.6f,1.85f);buyer.setSpacingBefore(14);var client=cell("",normal(),Element.ALIGN_LEFT);client.addElement(new Paragraph("Datos del cliente",serif(14)));client.addElement(new Paragraph(f.comprador().nombreComprador(),bold()));client.addElement(new Paragraph("NIT: "+f.comprador().nit(),normal()));buyer.addCell(client);var status=cell(balance.signum()==0?"PAGADO":"SALDO PENDIENTE",FontFactory.getFont(FontFactory.HELVETICA_BOLD,11,balance.signum()==0?GREEN:NAVY),Element.ALIGN_CENTER);status.setBackgroundColor(balance.signum()==0?PALE:CREAM);status.setVerticalAlignment(Element.ALIGN_MIDDLE);buyer.addCell(status);doc.add(buyer);
+  var charges=table(3.2f,.85f,1.15f,1.1f);charges.setHeaderRows(2);charges.setSplitRows(false);titleRow(charges,"Detalle de alojamiento y consumos",4);headers(charges,"Concepto","Cantidad","Precio unitario","Importe");for(var c:f.cargos()){charges.addCell(row(c.concepto(),Element.ALIGN_LEFT));charges.addCell(row(String.valueOf(c.cantidad()),Element.ALIGN_RIGHT));charges.addCell(row(money(c.precioUnitario()),Element.ALIGN_RIGHT));charges.addCell(row(money(c.monto()),Element.ALIGN_RIGHT));}doc.add(charges);
+  var payments=table(4.7f,1.5f);payments.setSplitRows(false);payments.setHeaderRows(2);titleRow(payments,"Pagos registrados",2);headers(payments,"Método de pago","Importe");for(var p:f.pagos()){payments.addCell(row(method(p),Element.ALIGN_LEFT));payments.addCell(row(money(p.monto()),Element.ALIGN_RIGHT));}doc.add(payments);
+  var bottom=table(1.1f,1);bottom.setSpacingBefore(20);bottom.setKeepTogether(true);var thanks=cell("",normal(),Element.ALIGN_LEFT);thanks.addElement(new Paragraph("Gracias por hospedarte\nen Villa Serena.",FontFactory.getFont(FontFactory.TIMES_ITALIC,17,NAVY)));thanks.addElement(new Paragraph("Estancias que dejan buenas historias",FontFactory.getFont(FontFactory.HELVETICA,8,MUTED)));bottom.addCell(thanks);var totals=table(1.3f,1);total(totals,"Total · "+f.leyendaIva(),f.total(),CREAM,NAVY);total(totals,"Pagado",paid,null,GREEN);total(totals,"Saldo",balance,balance.signum()==0?PALE:CREAM,balance.signum()==0?GREEN:NAVY);var summary=new PdfPCell(totals);summary.setBorder(Rectangle.NO_BORDER);summary.setPadding(0);bottom.addCell(summary);doc.add(bottom);doc.close();return out.toByteArray();
+ }
+ private static PdfPTable table(float... widths){var t=new PdfPTable(widths);t.setWidthPercentage(100);return t;}
+ private static PdfPCell cell(String text,Font font,int align){var c=new PdfPCell(new Phrase(text,font));c.setBorder(Rectangle.NO_BORDER);c.setPadding(8);c.setHorizontalAlignment(align);return c;}
+ private static PdfPCell row(String text,int align){var c=cell(text,normal(),align);c.setBorder(Rectangle.BOTTOM);c.setBorderColor(LINE);c.setBorderWidth(.5f);return c;}
+ private static void headers(PdfPTable t,String... labels){for(int i=0;i<labels.length;i++){var c=cell(labels[i],bold(),i==0?Element.ALIGN_LEFT:Element.ALIGN_RIGHT);c.setBackgroundColor(CREAM);t.addCell(c);}}
+ private static void titleRow(PdfPTable t,String title,int columns){var c=cell(title,serif(14),Element.ALIGN_LEFT);c.setColspan(columns);c.setPaddingTop(18);c.setPaddingBottom(7);t.addCell(c);}
+ private static void total(PdfPTable t,String label,BigDecimal v,Color bg,Color color){for(String text:new String[]{label,money(v)}){var c=cell(text,FontFactory.getFont(FontFactory.HELVETICA_BOLD,10,color),text.equals(label)?Element.ALIGN_LEFT:Element.ALIGN_RIGHT);if(bg!=null)c.setBackgroundColor(bg);t.addCell(c);}}
+ private static String value(String s){return s==null?"":s;} private static String money(BigDecimal n){return "Q "+n.setScale(2).toPlainString();}
+ private static String method(FacturaDetalle.Pago p){return switch(p.metodo()){case STRIPE->"Tarjeta en línea (Stripe)";case CANAL->"Pagado al canal";case EFECTIVO->"Efectivo";case TARJETA->"Tarjeta";case OTRO->"Otro";};}
 }

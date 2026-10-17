@@ -29,10 +29,12 @@ import jakarta.validation.Valid;
 @PreAuthorize("hasRole('HUESPED')")
 public class AppPedidosController {
 
+    private final com.villaserena.api.reservas.IdempotenciaReservas idempotencia;
     private final PedidoService pedidos;
     private final MenuService menu;
 
-    public AppPedidosController(PedidoService pedidos, MenuService menu) {
+    public AppPedidosController(com.villaserena.api.reservas.IdempotenciaReservas idempotencia, PedidoService pedidos, MenuService menu) {
+        this.idempotencia = idempotencia;
         this.pedidos = pedidos;
         this.menu = menu;
     }
@@ -40,6 +42,7 @@ public class AppPedidosController {
     @GetMapping("/menu")
     public MenuApp menu(@PathVariable String codigo) {
         ReservaService.validarCodigo(codigo);
+        pedidos.mios(codigo, UsuarioActual.id());
         return menu.menu();
     }
 
@@ -51,9 +54,9 @@ public class AppPedidosController {
 
     @PostMapping("/pedidos")
     @ResponseStatus(HttpStatus.CREATED)
-    public PedidoHuesped crear(@PathVariable String codigo, @Valid @RequestBody NuevoPedidoPeticion p) {
+    public PedidoHuesped crear(@PathVariable String codigo, @Valid @RequestBody NuevoPedidoPeticion p, @org.springframework.web.bind.annotation.RequestHeader(name="Idempotency-Key",required=false) String clave) {
         ReservaService.validarCodigo(codigo);
-        return pedidos.crear(codigo, UsuarioActual.id(), p);
+        return idempotencia.ejecutar("pedido:"+UsuarioActual.id()+":"+codigo,clave,p,PedidoHuesped.class,()->pedidos.crear(codigo, UsuarioActual.id(), p));
     }
 
     @GetMapping("/pedidos/{id}")

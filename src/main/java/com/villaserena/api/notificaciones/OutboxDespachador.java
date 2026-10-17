@@ -81,6 +81,12 @@ public class OutboxDespachador {
             enviador.enviar(aviso, json.readValue(aviso.getPayload(), MAPA));
             aviso.setEstado(EstadoNotificacion.ENVIADO);
             aviso.setEnviadoEn(reloj.instant());
+            var deliveredPayload = json.readValue(aviso.getPayload(), MAPA);
+            if ("RECUPERAR_PERSONAL".equals(deliveredPayload.get("proposito"))) {
+                var safePayload = new java.util.HashMap<String,Object>(deliveredPayload);
+                safePayload.remove("recuperacionUrl");
+                aviso.setPayload(json.writeValueAsString(safePayload));
+            }
             aviso.setUltimoError(null);
             enviado = true;
             log.info("Aviso {} ({}) enviado a {}", aviso.getId(), aviso.getTipo(), aviso.getDestinatario());

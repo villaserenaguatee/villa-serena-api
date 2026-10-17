@@ -40,6 +40,12 @@ public class AlmacenEnMemoria {
             return URL_FIRMADA + clave;
         }
 
+        @Override
+        public byte[] leerPrivado(String clave) {
+            byte[] bytes = objetos.get(clave);
+            if (bytes == null) throw new IllegalStateException("Archivo de prueba inexistente");
+            return bytes.clone();
+        }
         public Map<String, byte[]> objetos() {
             return objetos;
         }

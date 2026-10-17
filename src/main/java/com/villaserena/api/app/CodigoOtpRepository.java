@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 public interface CodigoOtpRepository extends JpaRepository<CodigoOtp, Long> {
 
     /** Los códigos vigentes del huésped, el más reciente primero. */
+    long countByHuespedIdAndCreadoEnAfter(long huespedId, Instant desde);
+
     @Query("""
             SELECT c FROM CodigoOtp c
             WHERE c.huespedId = :huespedId AND c.usadoEn IS NULL AND c.expiraEn > :ahora

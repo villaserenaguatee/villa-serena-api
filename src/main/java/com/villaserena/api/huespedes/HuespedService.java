@@ -36,6 +36,7 @@ public class HuespedService {
             nuevo.setNacionalidad(datos.nacionalidad().trim());
             nuevo.setTipoDocumento(datos.tipoDocumento());
             nuevo.setNumeroDocumento(datos.numeroDocumento().trim());
+            nuevo.setPaisEmisorPasaporte(datos.paisEmisorPasaporte());
             return huespedes.save(nuevo);
         });
     }
@@ -49,12 +50,12 @@ public class HuespedService {
     public RegistroHuespedRespuesta registrar(HuespedDatos datos) {
         List<Long> nuevo = jdbc.queryForList("""
                 INSERT INTO huespedes
-                    (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento, pais_emisor_pasaporte)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT ((lower(correo))) DO NOTHING
                 RETURNING id""", Long.class,
                 datos.nombreCompleto().trim(), datos.correo().trim(), datos.telefono().trim(),
-                datos.nacionalidad().trim(), datos.tipoDocumento().name(), datos.numeroDocumento().trim());
+                datos.nacionalidad().trim(), datos.tipoDocumento().name(), datos.numeroDocumento().trim(), datos.paisEmisorPasaporte());
         Huesped huesped = nuevo.isEmpty()
                 ? huespedes.findByCorreoIgnoreCase(datos.correo().trim()).orElseThrow()
                 : huespedes.findById(nuevo.getFirst()).orElseThrow();
@@ -71,13 +72,13 @@ public class HuespedService {
         }
         String patron = "%" + escaparLike(q) + "%";
         return jdbc.query("""
-                SELECT id, nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento
+                SELECT id, nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento, pais_emisor_pasaporte
                 FROM huespedes
                 WHERE nombre_completo ILIKE ? OR numero_documento ILIKE ? OR correo ILIKE ?
                 ORDER BY nombre_completo, id
                 LIMIT ?""",
                 (rs, i) -> new HuespedVista(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4),
-                        rs.getString(5), TipoDocumento.valueOf(rs.getString(6)), rs.getString(7)),
+                        rs.getString(5), TipoDocumento.valueOf(rs.getString(6)), rs.getString(7), rs.getString(8)),
                 patron, patron, patron, MAX_RESULTADOS);
     }
 

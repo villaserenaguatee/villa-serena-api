@@ -70,7 +70,7 @@ public class TarifaService {
         return jdbc.query("""
                 SELECT t.nombre, t.fecha_inicio, t.fecha_fin, t.ajuste_pct
                 FROM temporadas t
-                WHERE t.fecha_inicio < ? AND t.fecha_fin >= ?
+                WHERE t.activa AND t.fecha_inicio < ? AND t.fecha_fin >= ?
                   AND (t.aplica_a_todos OR EXISTS (
                         SELECT 1 FROM temporada_tipos_habitacion tt
                         WHERE tt.temporada_id = t.id AND tt.tipo_habitacion_id = ?))

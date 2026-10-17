@@ -30,12 +30,14 @@ public class AuthService {
     private final Clock reloj;
     private final int intentosMaximos;
     private final Duration duracionBloqueo;
+    private final String dummyHash;
 
     public AuthService(EmpleadoRepository empleados, TokenService tokens, PasswordEncoder passwordEncoder,
             Clock reloj, PropiedadesVillaSerena propiedades) {
         this.empleados = empleados;
         this.tokens = tokens;
         this.passwordEncoder = passwordEncoder;
+        this.dummyHash = passwordEncoder.encode(java.util.UUID.randomUUID().toString());
         this.reloj = reloj;
         this.intentosMaximos = propiedades.login().intentosMaximos();
         this.duracionBloqueo = Duration.ofMinutes(propiedades.login().bloqueoMinutos());
@@ -49,12 +51,13 @@ public class AuthService {
     @Transactional(noRollbackFor = ApiException.class)
     public SesionEmpleado login(LoginPeticion peticion) {
         Instant ahora = reloj.instant();
-        Empleado empleado = empleados.findByCorreoIgnoreCase(peticion.correo().trim())
-                .orElseThrow(AuthService::credencialesInvalidas);
+        var encontrado = empleados.findByCorreoIgnoreCase(peticion.correo().trim());
+        if (encontrado.isEmpty()) { passwordEncoder.matches(peticion.contrasena(), dummyHash); throw credencialesInvalidas(); }
+        Empleado empleado = encontrado.get();
 
         if (empleado.estaBloqueado(ahora)) {
-            throw new ApiException(HttpStatus.UNAUTHORIZED, "CUENTA_BLOQUEADA",
-                    "Cuenta bloqueada por intentos fallidos. Intenta de nuevo en 15 minutos.");
+            passwordEncoder.matches(peticion.contrasena(), dummyHash);
+            throw credencialesInvalidas();
         }
         if (!passwordEncoder.matches(peticion.contrasena(), empleado.getContrasenaHash())) {
             int intentos = empleado.getIntentosFallidos() + 1;

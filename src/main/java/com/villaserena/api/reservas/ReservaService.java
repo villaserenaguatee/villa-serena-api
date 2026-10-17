@@ -79,7 +79,12 @@ public class ReservaService {
      * </ul>
      */
     @Transactional
-    public Reserva crear(SolicitudReserva solicitud) {
+    public Reserva crear(SolicitudReserva solicitud) { return crearInterna(solicitud,null,null); }
+
+    @Transactional
+    public Reserva crearOferta(SolicitudReserva solicitud,Cotizacion cotizacion,String nombreOferta) { return crearInterna(solicitud,cotizacion,nombreOferta); }
+
+    private Reserva crearInterna(SolicitudReserva solicitud,Cotizacion cotizacionOferta,String nombreOferta) {
         disponibilidad.validarEstadia(solicitud.entrada(), solicitud.salida(), solicitud.numeroHuespedes());
         TipoHabitacionInfo tipo = disponibilidad.bloquearTipo(solicitud.tipoHabitacionId())
                 .filter(TipoHabitacionInfo::activo)
@@ -96,7 +101,7 @@ public class ReservaService {
         }
 
         boolean externo = solicitud.canal().esExterno();
-        Cotizacion cotizacion = externo ? null : tarifas.cotizar(tipo, solicitud.entrada(), solicitud.salida());
+        Cotizacion cotizacion = externo ? null : cotizacionOferta != null ? cotizacionOferta : tarifas.cotizar(tipo, solicitud.entrada(), solicitud.salida());
         BigDecimal total = externo ? solicitud.montoCanal().setScale(2, RoundingMode.HALF_UP) : cotizacion.total();
         Huesped huesped = solicitud.huespedId() != null
                 ? huespedesRepo.findById(solicitud.huespedId()).orElseThrow(() -> new ApiException(
@@ -140,7 +145,7 @@ public class ReservaService {
         cuenta.setReservaId(reserva.getId());
         cuenta.setAbiertaEn(ahora);
         cuentas.save(cuenta);
-        cargos.registrarAlojamiento(cuenta.getId(), conceptoAlojamiento(tipo.nombre(), reserva.noches()), total);
+        cargos.registrarAlojamiento(cuenta.getId(), conceptoAlojamiento(nombreOferta != null ? nombreOferta : tipo.nombre(), reserva.noches()), total);
 
         if (externo) {
             Pago pago = new Pago();
