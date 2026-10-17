@@ -41,3 +41,8 @@ Thumbs.db
 
 # Secretos locales (AGENTS.md §3): solo se sube .env.example
 .env
+
+.env.*
+!.env.example
+.local/
+*.private.*
