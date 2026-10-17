@@ -44,6 +44,7 @@ import jakarta.validation.Valid;
 @PreAuthorize("hasRole('RECEPCION')")
 public class RecepcionReservasController {
 
+    private final IdempotenciaReservas idempotencia;
     private final DisponibilidadService disponibilidad;
     private final ReservaService reservas;
     private final ReservaDetalleService detalle;
@@ -53,10 +54,11 @@ public class RecepcionReservasController {
     private final BusquedaReservasService busqueda;
     private final HuespedAdicionalService adicionales;
 
-    public RecepcionReservasController(DisponibilidadService disponibilidad, ReservaService reservas,
+    public RecepcionReservasController(IdempotenciaReservas idempotencia, DisponibilidadService disponibilidad, ReservaService reservas,
             ReservaDetalleService detalle, CancelacionService cancelacion, CheckinService checkin,
             HabitacionService habitaciones, BusquedaReservasService busqueda,
             HuespedAdicionalService adicionales) {
+        this.idempotencia = idempotencia;
         this.disponibilidad = disponibilidad;
         this.reservas = reservas;
         this.detalle = detalle;
@@ -107,10 +109,12 @@ public class RecepcionReservasController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ReservaDetalle crear(@Valid @RequestBody ReservaRecepcionPeticion p) {
+    public ReservaDetalle crear(@Valid @RequestBody ReservaRecepcionPeticion p, @org.springframework.web.bind.annotation.RequestHeader(name="Idempotency-Key", required=false) String clave) {
+        return idempotencia.ejecutar("recepcion:" + UsuarioActual.id(), clave, p, ReservaDetalle.class, () -> {
         Reserva reserva = reservas.crear(SolicitudReserva.recepcion(p.huespedId(), p.tipoHabitacionId(), p.entrada(),
                 p.salida(), p.numeroHuespedes(), p.habitacionId(), UsuarioActual.id()));
         return detalle.de(reserva);
+        });
     }
 
     @GetMapping("/{codigo}/cancelacion")

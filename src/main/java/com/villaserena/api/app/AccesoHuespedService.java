@@ -83,7 +83,7 @@ public class AccesoHuespedService {
     @Transactional
     public void solicitarCodigo(String correo) {
         Instant ahora = reloj.instant();
-        Optional<Huesped> encontrado = huespedes.findByCorreoIgnoreCase(correo.trim());
+        Optional<Huesped> encontrado = huespedes.bloquearPorCorreo(correo.trim());
         if (encontrado.isEmpty()) {
             log.debug("Código de acceso pedido para un correo sin huésped");
             return;
@@ -98,6 +98,10 @@ public class AccesoHuespedService {
             log.debug("Código de acceso pedido con bloqueo vigente");
             return;
         }
+
+        // Serializado por hu?sped; responder igual incluso cuando se limita el reenv?o.
+        if (codigos.countByHuespedIdAndCreadoEnAfter(huesped.getId(), ahora.minusSeconds(60)) > 0
+                || codigos.countByHuespedIdAndCreadoEnAfter(huesped.getId(), ahora.minusSeconds(900)) >= 3) return;
 
         String codigo = nuevoCodigo();
         CodigoOtp registro = new CodigoOtp();
@@ -120,10 +124,10 @@ public class AccesoHuespedService {
     @Transactional(noRollbackFor = ApiException.class)
     public Tokens verificarCodigo(String correo, String codigo) {
         Instant ahora = reloj.instant();
-        Huesped huesped = huespedes.findByCorreoIgnoreCase(correo.trim())
+        Huesped huesped = huespedes.bloquearPorCorreo(correo.trim())
                 .orElseThrow(AccesoHuespedService::codigoInvalido);
         if (huesped.otpBloqueado(ahora)) {
-            throw bloqueado();
+            throw codigoInvalido();
         }
 
         List<CodigoOtp> vigentes = codigos.vigentes(huesped.getId(), ahora);

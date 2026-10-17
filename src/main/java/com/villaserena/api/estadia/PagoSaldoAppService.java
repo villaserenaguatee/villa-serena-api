@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import org.springframework.stereotype.Service;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.villaserena.api.comun.ApiException;
@@ -41,9 +42,11 @@ public class PagoSaldoAppService {
     private final PasarelaStripe stripe;
     private final Clock reloj;
     private final String urlRetorno;
+    private final JdbcTemplate jdbc;
 
     public PagoSaldoAppService(CheckoutService checkout, CuentaRepository cuentas, CuentaService cuentaService,
-            PagoRepository pagos, PasarelaStripe stripe, Clock reloj, PropiedadesVillaSerena propiedades) {
+            PagoRepository pagos, PasarelaStripe stripe, Clock reloj, PropiedadesVillaSerena propiedades, JdbcTemplate jdbc) {
+        this.jdbc=jdbc;
         this.checkout = checkout;
         this.cuentas = cuentas;
         this.cuentaService = cuentaService;
@@ -56,7 +59,8 @@ public class PagoSaldoAppService {
     /** @return la sesión de pago, o vacío si el saldo ya es 0 (no se crea sesión). */
     @Transactional
     public Optional<PagoIniciado> iniciar(Reserva reserva) {
-        if (reserva.getEstado() != EstadoReserva.EN_ESTADIA) {
+        String estado=jdbc.queryForObject("SELECT estado FROM reservas WHERE id=? FOR UPDATE",String.class,reserva.getId());
+        if (!"EN_ESTADIA".equals(estado)) {
             throw ApiException.conflicto("ESTADO_INVALIDO", "Solo se paga el saldo durante la estadía.");
         }
         if (!checkout.dentroDeVentanaApp(reserva)) {
@@ -71,6 +75,14 @@ public class PagoSaldoAppService {
         var saldo = cuentaService.saldo(cuenta.getId());
         if (saldo.signum() <= 0) {
             return Optional.empty();
+        }
+        var pendiente=pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(),MetodoPago.STRIPE,EstadoPago.PENDIENTE);
+        if(pendiente.isPresent()){
+            var actual=stripe.obtenerSesion(pendiente.get().getStripeSessionId());
+            if(actual.abierta())return Optional.of(new PagoIniciado(actual.url(),actual.expiraEn()==null?null:OffsetDateTime.ofInstant(actual.expiraEn(),reloj.getZone())));
+            if(actual.pagada())throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Actualiza la cuenta antes de intentarlo de nuevo.");
+            pendiente.get().setEstado(EstadoPago.FALLIDO);
+            pagos.saveAndFlush(pendiente.get());
         }
         PasarelaStripe.Sesion sesion = stripe.crearSesion(
                 "Saldo de la reserva " + reserva.getCodigo() + " — Hotel Villa Serena", saldo,

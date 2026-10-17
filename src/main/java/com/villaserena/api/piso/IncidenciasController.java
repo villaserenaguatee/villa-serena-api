@@ -34,16 +34,19 @@ public class IncidenciasController {
     private static final String MANTENIMIENTO = "hasRole('MANTENIMIENTO_LIMPIEZA') and @areas.mantenimiento()";
 
     private final IncidenciaService incidencias;
+    private final com.villaserena.api.reservas.IdempotenciaReservas requests;
 
-    public IncidenciasController(IncidenciaService incidencias) {
+    public IncidenciasController(IncidenciaService incidencias, com.villaserena.api.reservas.IdempotenciaReservas requests) {
+        this.requests = requests;
         this.incidencias = incidencias;
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyRole('RECEPCION', 'MANTENIMIENTO_LIMPIEZA')")
-    public Incidencias.Creada reportar(@Valid @RequestBody ReportarIncidenciaPeticion p) {
-        return incidencias.reportar(p, UsuarioActual.id());
+    public Incidencias.Creada reportar(@Valid @RequestBody ReportarIncidenciaPeticion p, @org.springframework.web.bind.annotation.RequestHeader(name="Idempotency-Key",required=false) String key) {
+        long actor = UsuarioActual.id();
+        return requests.ejecutar("incidencia:"+actor,key,p,Incidencias.Creada.class,()->incidencias.reportar(p,actor));
     }
 
     @GetMapping

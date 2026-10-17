@@ -10,6 +10,9 @@ public interface AlmacenArchivos {
 
     boolean existePrivado(String clave);
 
+    /** Lectura interna del mismo archivo privado para adjuntos; nunca expone una URL pública. */
+    byte[] leerPrivado(String clave);
+
     /** URL firmada de lectura, válida por los minutos configurados. */
     String urlFirmada(String clave);
 }

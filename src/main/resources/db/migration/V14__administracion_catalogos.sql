@@ -1,0 +1,15 @@
+ALTER TABLE tipos_habitacion ADD COLUMN version BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE habitaciones ADD COLUMN version BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE empleados ADD COLUMN version BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE empleados ADD COLUMN perfil JSONB NOT NULL DEFAULT '{}'::jsonb CHECK(jsonb_typeof(perfil)='object');
+ALTER TABLE temporadas ADD COLUMN version BIGINT NOT NULL DEFAULT 1;
+ALTER TABLE temporadas ADD COLUMN activa BOOLEAN NOT NULL DEFAULT true;
+CREATE TABLE administracion_auditoria (
+ id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+ recurso VARCHAR(30) NOT NULL,
+ registro_id BIGINT NOT NULL,
+ empleado_id BIGINT NOT NULL REFERENCES empleados(id),
+ anterior JSONB,
+ nuevo JSONB NOT NULL,
+ creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);

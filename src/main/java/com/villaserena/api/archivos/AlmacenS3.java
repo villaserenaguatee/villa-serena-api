@@ -56,8 +56,17 @@ public class AlmacenS3 implements AlmacenArchivos {
     public String urlFirmada(String clave) {
         return firmador().presignGetObject(b -> b
                 .signatureDuration(Duration.ofMinutes(config.minutosUrlFirmada()))
-                .getObjectRequest(g -> g.bucket(config.bucketPrivado()).key(clave)))
+                .getObjectRequest(g -> {
+                    g.bucket(config.bucketPrivado()).key(clave);
+                    if (clave.startsWith("facturas/")) g.responseContentDisposition("attachment; filename=\""
+                            + clave.substring(clave.lastIndexOf('/')+1).replaceFirst("^factura-", "Factura-Villa-Serena-") + "\"");
+                }))
                 .url().toString();
+    }
+
+    @Override
+    public byte[] leerPrivado(String clave) {
+        return cliente().getObjectAsBytes(b -> b.bucket(config.bucketPrivado()).key(clave)).asByteArray();
     }
 
     private synchronized S3Client cliente() {
