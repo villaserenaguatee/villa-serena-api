@@ -1,0 +1,16 @@
+name: Auto Add Issue to Scrumban
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  add-to-project:
+    name: Add issue to Scrumban Project
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add issue to project
+        uses: actions/add-to-project@v1
+        with:
+          project-url: https://github.com/orgs/villaserenaguatee/projects/5
+          github-token: ${{ secrets.PROJECT_PAT }}

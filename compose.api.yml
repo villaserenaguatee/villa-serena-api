@@ -1,0 +1,20 @@
+services:
+  api:
+    image: ${IMAGE_URI:?IMAGE_URI must point to a published ARM64 image}
+    restart: unless-stopped
+    env_file:
+      - /opt/villa-serena/api/.env
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/villa_serena
+      SPRING_DATASOURCE_USERNAME: villa_serena
+      SPRING_PROFILES_ACTIVE: prod
+    ports:
+      - "8080:8080"
+    mem_limit: 900m
+    networks:
+      - backend
+
+networks:
+  backend:
+    external: true
+    name: villa-serena-backend

@@ -1,0 +1,101 @@
+name: API CD to EC2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+concurrency:
+  group: villa-serena-api-production
+  cancel-in-progress: false
+
+jobs:
+  build-push-deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Verify application before deployment
+        run: |
+          chmod +x mvnw
+          ./mvnw -B verify
+      - name: AWS credentials (GitHub OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_API_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Authenticate to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push ARM64 image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/villaserenaguatee/villa-serena-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Deploy API only via SSM Run Command
+        env:
+          INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID }}
+          REGION: ${{ vars.AWS_REGION }}
+          IMAGE_URI: ghcr.io/villaserenaguatee/villa-serena-api:${{ github.sha }}
+        run: |
+          set -euo pipefail
+          : "${INSTANCE_ID:?Missing AWS_EC2_INSTANCE_ID}"
+          : "${REGION:?Missing AWS_REGION}"
+          # SSM command values passed as JSON; files transferred as base64 to
+          # avoid depending on any public SSH endpoint.
+          python3 - <<'PY'
+          import base64, json, os, subprocess
+          compose = base64.b64encode(open("compose.api.yml", "rb").read()).decode()
+          deploy = base64.b64encode(open("scripts/deploy-ec2.sh", "rb").read()).decode()
+          # Paths and values come from trusted workflow configuration.
+          cmds = [
+            "set -eu",
+            "install -d -m 700 /opt/villa-serena/api",
+            f"echo '{compose}' | base64 -d > /opt/villa-serena/api/compose.yml",
+            f"echo '{deploy}' | base64 -d > /opt/villa-serena/api/deploy.sh",
+            "chmod 700 /opt/villa-serena/api/deploy.sh",
+            f"IMAGE_URI='{os.environ['IMAGE_URI']}' AWS_REGION='{os.environ['REGION']}' /opt/villa-serena/api/deploy.sh"
+          ]
+          payload = json.dumps({"commands": cmds})
+          command_id = subprocess.check_output(
+              ["aws", "ssm", "send-command",
+               "--instance-ids", os.environ["INSTANCE_ID"],
+               "--document-name", "AWS-RunShellScript",
+               "--parameters", payload,
+               "--region", os.environ["REGION"],
+               "--query", "Command.CommandId", "--output", "text"], text=True).strip()
+          # Waiter failure is handled by checking the final invocation status.
+          subprocess.run(["aws", "ssm", "wait", "command-executed",
+                          "--command-id", command_id,
+                          "--instance-id", os.environ["INSTANCE_ID"],
+                          "--region", os.environ["REGION"]], check=False)
+          info = json.loads(subprocess.check_output(
+              ["aws", "ssm", "get-command-invocation",
+               "--command-id", command_id,
+               "--instance-id", os.environ["INSTANCE_ID"],
+               "--region", os.environ["REGION"], "--output", "json"], text=True))
+          print("SSM status:", info["Status"])
+          # Print errors but never emit script output containing secrets.
+          if info["Status"] != "Success":
+              print(info.get("StandardErrorContent", "")[-2000:])
+              raise SystemExit(1)
+          PY
