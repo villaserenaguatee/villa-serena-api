@@ -7,15 +7,15 @@ deployment uses `docker compose -p villa-serena-api ... up -d --no-deps api`.
 ## Prerequisites (all must be completed before dispatch)
 
 1. The `villa-serena-api-deploy-role` exists from infra IAM, but **initially
-   had no permissions**. Add least-privilege ECR push and SSM Run Command
+   had no permissions**. Add least-privilege GHCR push and SSM Run Command
    permissions for this EC2 and `AWS-RunShellScript`; add narrowly scoped
    ecr pull and SSM parameter read permissions to the EC2 instance role.
    Review IAM policies in an **infra PR**, not here.
-2. Create a private **ECR repository** named by `AWS_ECR_REPOSITORY`.
+2. Create a private **ECR repository** named by ``.
    Keep it in the same AWS region and account. Use Terraform in infra.
 3. Create these GitHub **repository variables** in `villa-serena-api`:
    `AWS_API_DEPLOY_ROLE_ARN`, `AWS_REGION`,
-   `AWS_ECR_REPOSITORY`, `AWS_EC2_INSTANCE_ID`.
+   `AWS_EC2_INSTANCE_ID`.
 4. In AWS SSM Parameter Store, create these **SecureString** parameters:
    `/villa-serena/prod/api/SPRING_DATASOURCE_PASSWORD`
    (same value as database initialization password),
