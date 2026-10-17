@@ -79,17 +79,17 @@ class CatalogoPublicoIntegrationTest {
 
     @Test
     void elCatalogoSoloMuestraLosTiposActivos() throws Exception {
+        // 4 tipos del seed (V6) y 8 del catálogo (V17), ordenados por precio.
         mvc.perform(get("/api/v1/publico/tipos-habitacion"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(4)))
-                .andExpect(jsonPath("$[0].nombre").value("Estándar Jardín"))
-                .andExpect(jsonPath("$[0].capacidad").value(2))
-                .andExpect(jsonPath("$[0].precioBaseNoche").value(650.00))
-                .andExpect(jsonPath("$[0].fotos", hasSize(0)));
+                .andExpect(jsonPath("$", hasSize(12)))
+                .andExpect(jsonPath("$[?(@.nombre == 'Estándar Jardín')].capacidad").value(2))
+                .andExpect(jsonPath("$[?(@.nombre == 'Estándar Jardín')].precioBaseNoche").value(650.00))
+                .andExpect(jsonPath("$[?(@.nombre == 'Estándar Jardín')].fotos[*]", hasSize(0)));
 
         jdbc.update("UPDATE tipos_habitacion SET estado = 'INACTIVO' WHERE nombre = 'Suite Volcán'");
         mvc.perform(get("/api/v1/publico/tipos-habitacion"))
-                .andExpect(jsonPath("$", hasSize(3)))
+                .andExpect(jsonPath("$", hasSize(11)))
                 .andExpect(jsonPath("$[*].nombre", not(hasItem("Suite Volcán"))));
 
         jdbc.update("UPDATE tipos_habitacion SET estado = 'INACTIVO'");

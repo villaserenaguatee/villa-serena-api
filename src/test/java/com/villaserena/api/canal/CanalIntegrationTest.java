@@ -57,10 +57,11 @@ class CanalIntegrationTest {
                   "huesped": {
                     "nombreCompleto": "John Smith",
                     "correo": "john.smith@example.com",
-                    "telefono": "+1 555 0100",
+                    "telefono": "+1 202 555 0100",
                     "nacionalidad": "Estadounidense",
                     "tipoDocumento": "PASAPORTE",
-                    "numeroDocumento": "567890123"
+                    "numeroDocumento": "567890123",
+                    "paisEmisorPasaporte": "US"
                   }
                 }""".formatted(identificador, entrada, salida, huespedes);
     }

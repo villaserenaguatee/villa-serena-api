@@ -37,8 +37,10 @@ class MigracionesDemoTests {
 
 	@Test
 	void cargaLosDatosDePresentacion() {
-		assertThat(contar("habitaciones")).isEqualTo(12);
-		assertThat(contar("tipos_habitacion")).isEqualTo(4);
+		// 12 habitaciones y 4 tipos del seed (V6), más los 8 tipos del catálogo (V17) y las 10
+		// habitaciones del inventario aprobado (V24).
+		assertThat(contar("habitaciones")).isEqualTo(22);
+		assertThat(contar("tipos_habitacion")).isEqualTo(12);
 		assertThat(contar("canales")).isEqualTo(2);
 		assertThat(contar("empleados")).isEqualTo(7);
 		assertThat(contar("configuracion_hotel")).isEqualTo(1);

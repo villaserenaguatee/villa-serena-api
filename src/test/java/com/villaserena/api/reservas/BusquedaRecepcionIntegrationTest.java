@@ -282,8 +282,9 @@ class BusquedaRecepcionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.desde").value("2026-10-01"))
                 .andExpect(jsonPath("$.hasta").value("2026-10-31"))
-                .andExpect(jsonPath("$.grupos", hasSize(4)))
-                .andExpect(jsonPath("$.grupos[*].habitaciones[*].numero", hasSize(11)))
+                // 12 tipos activos (V6 y V17) y 22 habitaciones (V6 y V24), menos la 303.
+                .andExpect(jsonPath("$.grupos", hasSize(12)))
+                .andExpect(jsonPath("$.grupos[*].habitaciones[*].numero", hasSize(21)))
                 .andExpect(jsonPath("$.grupos[*].habitaciones[*].numero", not(hasItem("303"))))
                 .andExpect(jsonPath("$.grupos[?(@.tipoHabitacion.nombre == 'Doble Superior')].habitaciones[*].numero",
                         contains("103", "104", "105", "203")))
@@ -311,7 +312,9 @@ class BusquedaRecepcionIntegrationTest {
             mvc.perform(get("/api/v1/huespedes").param("q", "ana").header("Authorization", otro))
                     .andExpect(status().isForbidden());
             mvc.perform(post("/api/v1/huespedes").header("Authorization", otro)
-                            .contentType(MediaType.APPLICATION_JSON).content(huespedJson("x", "x@correo.test", "1")))
+                            // Datos válidos: la validación del cuerpo corre antes que el permiso.
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(huespedJson("x", "x@correo.test", "1000000000001")))
                     .andExpect(status().isForbidden());
             mvc.perform(get("/api/v1/reservas").header("Authorization", otro)).andExpect(status().isForbidden());
             mvc.perform(get("/api/v1/reservas/{c}", codigo).header("Authorization", otro))

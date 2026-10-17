@@ -38,7 +38,8 @@ public class CodigoOtp {
     @Column(name = "usado_en")
     private Instant usadoEn;
 
-    @Column(name = "creado_en", insertable = false, updatable = false)
+    /** Con el reloj del API, como {@code expiraEn}: el límite de reenvío los compara con él. */
+    @Column(name = "creado_en", nullable = false, updatable = false)
     private Instant creadoEn;
 
     public boolean sirve(Instant ahora) {

@@ -94,9 +94,10 @@ class HabitacionesIntegrationTest {
     @Test
     void listaLasHabitacionesActivasConSuEstado() throws Exception {
         jdbc.update("UPDATE habitaciones SET estado = 'INACTIVO' WHERE numero = '303'");
+        // 22 habitaciones del seed (V6) y del inventario aprobado (V24), menos la 303.
         listar("")
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(11)))
+                .andExpect(jsonPath("$", hasSize(21)))
                 .andExpect(jsonPath("$[0].numero").value("101"))
                 .andExpect(jsonPath("$[0].piso").value(1))
                 .andExpect(jsonPath("$[0].tipoHabitacion.nombre").value("Estándar Jardín"))
@@ -113,7 +114,7 @@ class HabitacionesIntegrationTest {
     void losFiltrosSeCombinan() throws Exception {
         jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE numero IN ('201', '104')");
         jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE numero = '202'");
-        listar("?piso=2").andExpect(jsonPath("$[*].numero", contains("201", "202", "203", "204")));
+        listar("?piso=2").andExpect(jsonPath("$[*].numero", contains("201", "202", "203", "204", "205", "206", "207")));
         listar("?condicion=SUCIA").andExpect(jsonPath("$[*].numero", contains("104", "201")));
         listar("?ocupacion=OCUPADA").andExpect(jsonPath("$[*].numero", contains("202")));
         listar("?tipoHabitacionId=" + tipoId("Suite Volcán") + "&piso=2&condicion=LIMPIA")

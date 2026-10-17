@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -103,9 +104,16 @@ class FacturaCorreoMailpitTest {
     @MockitoBean
     PasarelaStripe stripe;
 
+    @AfterEach
+    void reiniciarReloj() {
+        reloj.reiniciar();
+    }
+
     @Test
     void elCorreoConElPdfLlegaAMailpit() throws Exception {
-        long recepcionista = empleados.findByCorreoIgnoreCase("ana.perez@villaserena.test").orElseThrow().getId();
+        // findByCorreoIgnoreCase bloquea la fila (FOR UPDATE): necesita una transacción.
+        long recepcionista = transacciones.execute(
+                t -> empleados.findByCorreoIgnoreCase("ana.perez@villaserena.test").orElseThrow().getId());
         String codigo = transacciones.execute(t -> {
             long huesped = jdbc.queryForObject("""
                     INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento,
@@ -145,7 +153,7 @@ class FacturaCorreoMailpitTest {
         String mensaje = http.send(HttpRequest.newBuilder(URI.create(api + "/message/" + id)).build(),
                 HttpResponse.BodyHandlers.ofString()).body();
         assertThat(JsonPath.<List<String>>read(mensaje, "$.Attachments[*].FileName"))
-                .containsExactly("factura-VS-A-1.pdf");
+                .containsExactly("Factura-Villa-Serena-VS-A-1.pdf");
         assertThat(JsonPath.<List<String>>read(mensaje, "$.Attachments[*].ContentType"))
                 .containsExactly("application/pdf");
         assertThat(JsonPath.<String>read(mensaje, "$.HTML")).contains(codigo).contains("Q 1300.00");
