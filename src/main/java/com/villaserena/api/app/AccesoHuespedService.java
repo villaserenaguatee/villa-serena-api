@@ -107,6 +107,7 @@ public class AccesoHuespedService {
         CodigoOtp registro = new CodigoOtp();
         registro.setHuespedId(huesped.getId());
         registro.setCodigoHash(passwordEncoder.encode(codigo));
+        registro.setCreadoEn(ahora);
         registro.setExpiraEn(ahora.plus(VIGENCIA));
         codigos.save(registro);
 

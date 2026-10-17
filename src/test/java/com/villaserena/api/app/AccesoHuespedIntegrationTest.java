@@ -8,7 +8,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.jayway.jsonpath.JsonPath;
@@ -58,12 +61,17 @@ class AccesoHuespedIntegrationTest {
     @MockitoBean
     PasarelaStripe stripe;
 
+    /** AbusoPublicoFilter cuenta las peticiones por IP en memoria: cada prueba llega como otro cliente. */
+    private static final AtomicInteger CLIENTES = new AtomicInteger();
+
     long huespedId;
     String codigoReserva;
+    String ipCliente;
 
     @BeforeEach
     void prepararHuespedConReserva() {
         reloj.reiniciar();
+        ipCliente = "198.51.100." + (CLIENTES.incrementAndGet() % 250 + 1);
         long recepcionista = jdbc.queryForObject(
                 "SELECT id FROM empleados WHERE correo = 'ana.perez@villaserena.test'", Long.class);
         huespedId = jdbc.queryForObject("""
@@ -75,18 +83,30 @@ class AccesoHuespedIntegrationTest {
         codigoReserva = reserva.getCodigo();
     }
 
+    @AfterEach
+    void reiniciarReloj() {
+        reloj.reiniciar();
+    }
+
     // ------------------------------------------------------------------
     // Ayudas
     // ------------------------------------------------------------------
 
+    private RequestPostProcessor desdeElCliente() {
+        return peticion -> {
+            peticion.setRemoteAddr(ipCliente);
+            return peticion;
+        };
+    }
+
     private ResultActions solicitar(String correo) throws Exception {
-        return mvc.perform(post("/api/v1/app/acceso/solicitar-codigo")
+        return mvc.perform(post("/api/v1/app/acceso/solicitar-codigo").with(desdeElCliente())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"correo\": \"%s\"}".formatted(correo)));
     }
 
     private ResultActions verificar(String correo, String codigo) throws Exception {
-        return mvc.perform(post("/api/v1/app/acceso/verificar-codigo")
+        return mvc.perform(post("/api/v1/app/acceso/verificar-codigo").with(desdeElCliente())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"correo\": \"%s\", \"codigo\": \"%s\"}".formatted(correo, codigo)));
     }
@@ -203,16 +223,17 @@ class AccesoHuespedIntegrationTest {
         // El quinto fallo deja el bloqueo puesto.
         verificar("acceso.ana@correo.test", equivocado).andExpect(status().isUnauthorized());
 
-        // Ahora ni el código correcto entra.
+        // Ahora ni el código correcto entra. La respuesta es la de un código inválido para no
+        // revelar el bloqueo (AccesoLimitesTest).
         verificar("acceso.ana@correo.test", correcto)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.codigo").value("ACCESO_BLOQUEADO"));
+                .andExpect(jsonPath("$.codigo").value("CODIGO_INVALIDO"));
 
         // Pedir otro código no levanta el bloqueo ni reinicia los intentos.
         solicitar("acceso.ana@correo.test").andExpect(status().isOk());
         verificar("acceso.ana@correo.test", correcto)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.codigo").value("ACCESO_BLOQUEADO"));
+                .andExpect(jsonPath("$.codigo").value("CODIGO_INVALIDO"));
 
         // Pasados los 15 minutos vuelve a funcionar.
         reloj.fijar(reloj.instant().plusSeconds(15 * 60 + 1));

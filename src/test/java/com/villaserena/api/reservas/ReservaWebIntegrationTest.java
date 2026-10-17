@@ -1,6 +1,7 @@
 package com.villaserena.api.reservas;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Base64;
+import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -90,23 +93,24 @@ class ReservaWebIntegrationTest {
         mvc.perform(get("/api/v1/publico/disponibilidad")
                         .param("entrada", "2026-10-15").param("salida", "2026-11-20").param("huespedes", "2"))
                 .andExpect(status().isBadRequest());
-        // 5 huéspedes: solo la Suite Familiar tiene capacidad.
+        // 5 huéspedes: solo la Suite Familiar (V6) y los dos tipos para 5 del catálogo (V17).
         mvc.perform(get("/api/v1/publico/disponibilidad")
                         .param("entrada", "2026-10-15").param("salida", "2026-10-17").param("huespedes", "5"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].tipoHabitacion.nombre").value("Suite Familiar"));
+                .andExpect(jsonPath("$[*].tipoHabitacion.nombre",
+                        containsInAnyOrder("Suite Familiar", "Familiar Cinco", "Premium Cinco")));
     }
 
     @Test
     void reservasQueSeCruzanAgotanElTipo() throws Exception {
-        long suite = tipoId("Suite Volcán"); // 3 habitaciones: 201, 202 y 303
+        long suite = tipoId("Suite Volcán"); // 4 habitaciones: 201, 202, 303 (V6) y 304 (V24)
         crearReserva(suite, "2026-11-10", "2026-11-13", "uno@correo.test", 201);
         crearReserva(suite, "2026-11-12", "2026-11-14", "dos@correo.test", 201);
         crearReserva(suite, "2026-11-12", "2026-11-13", "tres@correo.test", 201);
+        crearReserva(suite, "2026-11-12", "2026-11-13", "cuatro@correo.test", 201);
 
         // La noche del 12 ya no tiene cupo; la del 10 sí.
-        crearReserva(suite, "2026-11-11", "2026-11-13", "cuatro@correo.test", 409);
+        crearReserva(suite, "2026-11-11", "2026-11-13", "cinco@correo.test", 409);
         mvc.perform(get("/api/v1/publico/disponibilidad")
                         .param("entrada", "2026-11-12").param("salida", "2026-11-13").param("huespedes", "1"))
                 .andExpect(jsonPath("$[?(@.tipoHabitacion.nombre == 'Suite Volcán')]").isEmpty());
@@ -243,8 +247,31 @@ class ReservaWebIntegrationTest {
                  "huesped": {"nombreCompleto": "Cliente Prueba", "correo": "%s", "telefono": "+502 5555 0000",
                              "nacionalidad": "Guatemalteca", "tipoDocumento": "DPI", "numeroDocumento": "1234567890101"}}"""
                 .formatted(tipoId, LocalDate.parse(entrada), LocalDate.parse(salida), correo);
-        return mvc.perform(post("/api/v1/publico/reservas").contentType(MediaType.APPLICATION_JSON).content(json))
+        UUID borrador = UUID.randomUUID();
+        return mvc.perform(post("/api/v1/publico/reservas").contentType(MediaType.APPLICATION_JSON).content(json)
+                        .header("Idempotency-Key", UUID.randomUUID().toString())
+                        .header("X-Booking-Draft", borrador.toString())
+                        .header("X-Booking-Email-Verification", correoVerificado(correo, borrador)))
                 .andExpect(status().is(estado))
                 .andReturn().getResponse().getContentAsString();
+    }
+
+    /**
+     * La web verifica el correo antes de reservar (VerificacionCorreoReserva). Aquí se deja el
+     * comprobante ya verificado, como si el huésped hubiera escrito el código que le llegó.
+     */
+    private String correoVerificado(String correo, UUID borrador) {
+        byte[] azar = new byte[32];
+        new java.security.SecureRandom().nextBytes(azar);
+        String comprobante = Base64.getUrlEncoder().withoutPadding().encodeToString(azar);
+        jdbc.update("""
+                INSERT INTO reserva_correo_verificaciones (id, correo, borrador, codigo_hash, creado_en, expira_en,
+                                                           verificado_en, comprobante_hash, comprobante_expira_en)
+                VALUES (?, lower(?), ?, 'NO_APLICA', ?, ?, ?, encode(sha256(convert_to(?, 'UTF8')), 'hex'), ?)""",
+                UUID.randomUUID(), correo, borrador, java.sql.Timestamp.from(RelojFijoConfig.AHORA),
+                java.sql.Timestamp.from(RelojFijoConfig.AHORA.plusSeconds(600)),
+                java.sql.Timestamp.from(RelojFijoConfig.AHORA), comprobante,
+                java.sql.Timestamp.from(RelojFijoConfig.AHORA.plusSeconds(1800)));
+        return comprobante;
     }
 }

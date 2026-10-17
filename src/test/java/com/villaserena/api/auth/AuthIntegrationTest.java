@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.Instant;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -76,8 +78,11 @@ class AuthIntegrationTest {
         for (int i = 0; i < 5; i++) {
             login(correo, "Equivocada1", 401);
         }
+        // Bloqueada, ni la contraseña correcta entra. La respuesta es la genérica para no
+        // revelar que la cuenta existe y está bloqueada (AuthHardeningTest).
         String bloqueado = login(correo, CONTRASENA, 401);
-        assertThat((String) JsonPath.read(bloqueado, "$.codigo")).isEqualTo("CUENTA_BLOQUEADA");
+        assertThat((String) JsonPath.read(bloqueado, "$.codigo")).isEqualTo("CREDENCIALES_INVALIDAS");
+        assertThat(empleados.findByCorreoIgnoreCase(correo).orElseThrow().estaBloqueado(Instant.now())).isTrue();
     }
 
     @Test

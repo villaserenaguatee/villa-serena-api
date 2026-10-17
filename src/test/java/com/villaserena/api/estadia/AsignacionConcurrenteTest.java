@@ -162,7 +162,9 @@ class AsignacionConcurrenteTest {
     private String token(String correo) {
         reloj.fijar(Instant.now());
         try {
-            return "Bearer " + tokens.emitirParaEmpleado(empleados.findByCorreoIgnoreCase(correo).orElseThrow())
+            // findByCorreoIgnoreCase bloquea la fila (FOR UPDATE): necesita una transacción.
+            return "Bearer " + tokens.emitirParaEmpleado(
+                    transacciones.execute(t -> empleados.findByCorreoIgnoreCase(correo).orElseThrow()))
                     .accessToken();
         } finally {
             reloj.reiniciar();

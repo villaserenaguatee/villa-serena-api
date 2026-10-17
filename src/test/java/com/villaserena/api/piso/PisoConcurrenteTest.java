@@ -26,6 +26,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
@@ -50,6 +51,9 @@ class PisoConcurrenteTest {
 
     @Autowired
     JdbcTemplate jdbc;
+
+    @Autowired
+    TransactionTemplate transacciones;
 
     @Autowired
     EmpleadoRepository empleados;
@@ -146,7 +150,9 @@ class PisoConcurrenteTest {
     private String token(String correo) {
         reloj.fijar(Instant.now());
         try {
-            return "Bearer " + tokens.emitirParaEmpleado(empleados.findByCorreoIgnoreCase(correo).orElseThrow())
+            // findByCorreoIgnoreCase bloquea la fila (FOR UPDATE): necesita una transacción.
+            return "Bearer " + tokens.emitirParaEmpleado(
+                    transacciones.execute(t -> empleados.findByCorreoIgnoreCase(correo).orElseThrow()))
                     .accessToken();
         } finally {
             reloj.reiniciar();

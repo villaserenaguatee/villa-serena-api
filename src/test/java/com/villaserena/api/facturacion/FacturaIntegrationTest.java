@@ -159,8 +159,8 @@ class FacturaIntegrationTest {
 
         String texto = textoDelPdf(pdf.generar(consultas.detalle(id)));
         assertThat(texto)
-                .contains("Hotel Villa Serena", "Villa Serena Hotelera, S.A.", "NIT 4817205-7",
-                        "FACTURA VS-A No. 1", "05/10/2026 12:00", "Reserva: " + codigo, "NIT: CF",
+                .contains("Hotel Villa Serena", "Villa Serena Hotelera, S.A.", "NIT: 4817205-7",
+                        "Serie: VS-A  Número: 1", "05/10/2026 12:00", "Reserva: " + codigo, "NIT: CF",
                         "Carla Salida", "Alojamiento Estándar Jardín (2 noches)", "Lavandería", "Q 200.00",
                         "IVA incluido", "Q 1500.00", "Efectivo", "no válida ante la SAT")
                 .doesNotContain("Minibar");
@@ -182,9 +182,9 @@ class FacturaIntegrationTest {
         long id = facturaId(checkout(codigo, "CF", "Carla Salida"));
         mvc.perform(get("/api/v1/facturas/{id}/pdf", id).header("Authorization", recepcion))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.url").value(AlmacenEnMemoria.URL_FIRMADA + "facturas/factura-VS-A-1.pdf"))
+                .andExpect(jsonPath("$.url").value(AlmacenEnMemoria.URL_FIRMADA + "facturas/presentacion-v2/Factura-Villa-Serena-VS-A-1.pdf"))
                 .andExpect(jsonPath("$.expiraEn").value(startsWith("2026-10-05T12:10:00")));
-        byte[] guardado = almacen.objetos().get("facturas/factura-VS-A-1.pdf");
+        byte[] guardado = almacen.objetos().get("facturas/presentacion-v2/Factura-Villa-Serena-VS-A-1.pdf");
         assertThat(new String(guardado, 0, 4)).isEqualTo("%PDF");
         mvc.perform(get("/api/v1/facturas/{id}/pdf", id).header("Authorization", recepcion))
                 .andExpect(status().isOk());
