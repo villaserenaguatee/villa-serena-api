@@ -24,6 +24,7 @@ import org.testcontainers.utility.MountableFile;
 @ActiveProfiles("demo")
 @TestPropertySource(properties = {
 		// Valores solo para las pruebas (no son secretos reales).
+		"villaserena.jwt.secreto=UHVibGljIHRlc3QgZml4dHVyZSBvbmx5IC0gbmV2ZXIgY29uZmlndXJlIHRoZSBhcHBsaWNhdGlvbiB3aXRoIHRoaXMgdmFsdWUu",
 		"DEMO_PASSWORD_HASH=$2y$10$EqZQCedXATrvLDvDyb/.K.WO6cgguZssAVOVY/nKQSTZChxDb5HPq",
 		"CANAL1_KEY_HASH=9f06c44dd5a80429231bfc26a3334bef28ca9b64345a922aba20ea8eabc50e33",
 		"CANAL2_KEY_HASH=6c1d9490f580587508725dfe3c742c0edb36ffa76e2daaccc54178a92b5a3406" })
