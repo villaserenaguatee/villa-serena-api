@@ -41,11 +41,7 @@ os.chmod(dest + ".tmp", 0o600)
 os.replace(dest + ".tmp", dest)
 PY
 
-# Docker auth on the EC2 requires ecr:GetAuthorizationToken on its instance role.
-registry="${IMAGE_URI%%/*}"
-aws ecr get-login-password --region "$AWS_REGION" |
-  docker login --username AWS --password-stdin "$registry"
-
+# Public GHCR image: EC2 pulls without registry credentials.
 cd "$deploy_dir"
 # Compose file is installed by the SSM command as a separate payload.
 IMAGE_URI="$IMAGE_URI" docker compose -p villa-serena-api -f compose.yml pull api
