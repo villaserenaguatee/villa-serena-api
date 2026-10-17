@@ -17,3 +17,11 @@ CORS con orígenes concretos; WEB_URL y APP_URL_RETORNO del frontend. En desplie
 **No se ejecutaron pruebas ni compilación por petición del usuario.** Solo revisión de los archivos incluidos. No acredita recorridos nuevos ni ausencia de vulnerabilidades. Pendientes: cuotas distribuidas, auditoría de dependencias Java/imagen, carreras de renovación y casos interactivos específicos. FEL/operaciones bancarias reales no implementadas. Personalización Stripe aplazada, conservando el Sandbox actual.
 
 Sin merge, despliegue ni PR.
+
+## Validación y rotación posterior autorizadas — 16/10/2026
+
+Build Maven/Java21 y empaquetado de la imagen de ejecución aprobados. También compiló las fuentes de test, pero `-DskipTests` omitió su ejecución. Migraciones comparadas con el JAR activo: coinciden, sin aplicar cambios de esquema a la base existente.
+
+Aplicado únicamente al API local8081: JWT nuevo aleatorio de64 bytes (512bits), separado del ejemplo y guardado fuera de Git en configuración privada con ACL restringida. Firma antigua rechazada401 y firma nueva aceptada200 en comprobaciones técnicas de solo lectura;16 refresh anteriores revocados conservando sus registros. No acredita un nuevo login por contraseña/correo. Sin cambios de duración de sesiones, claves SMTP/OAuth/Stripe ni permisos.
+
+API saludable,14 tablas de negocio con huellas idénticas antes/después, mismo PostgreSQL/volumen y servicios de ferretería intactos. No se realizaron pagos ni envíos. El dato de exposición JWT anterior queda resuelto en el entorno local; la advertencia histórica sigue siendo aplicable a otros entornos que reutilicen fixtures. No se desplegó a ningún servidor remoto.
