@@ -2,9 +2,9 @@ name: API CI
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [main, develop, dev]
   push:
-    branches: [develop, main]
+    branches: [main, develop, dev]
 
 permissions:
   contents: read
