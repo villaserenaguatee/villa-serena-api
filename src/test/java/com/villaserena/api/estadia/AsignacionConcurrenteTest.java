@@ -29,7 +29,7 @@ import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Asignaciones simultáneas de la misma habitación (HU-REC-07). Sin {@code @Transactional}
@@ -60,7 +60,7 @@ class AsignacionConcurrenteTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     long huespedId;
     long reservaA;

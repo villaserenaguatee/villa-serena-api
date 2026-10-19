@@ -6,7 +6,7 @@ import java.time.OffsetDateTime;
 import com.villaserena.api.reservas.EstadoPago;
 import com.villaserena.api.reservas.MetodoPago;
 
-/** Pago visible para el huésped: sin referencias de Stripe ni responsables. */
+/** Pago visible para el huésped: sin referencias de Recurrente ni responsables. */
 public record PagoCuentaHuesped(Long id, OffsetDateTime fechaHora, MetodoPago metodo, BigDecimal monto,
         EstadoPago estado) {
 

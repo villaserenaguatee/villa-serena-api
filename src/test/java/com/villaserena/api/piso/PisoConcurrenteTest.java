@@ -33,7 +33,7 @@ import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
 import com.villaserena.api.notificaciones.HabitacionEventos;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Dos empleados a la vez (OBJ-3B-1): solo uno inicia la limpieza o toma la incidencia;
@@ -65,7 +65,7 @@ class PisoConcurrenteTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @MockitoBean
     HabitacionEventos eventos;

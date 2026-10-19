@@ -22,38 +22,38 @@ import com.villaserena.api.reservas.Pago;
 import com.villaserena.api.reservas.PagoRepository;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.dto.PagoIniciado;
-import com.villaserena.api.reservas.stripe.PagoStripeService;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PagoOnlineService;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pago del saldo desde la app (HU-HUE-16): solo EN_ESTADIA, de 00:00 a 12:00 del día
- * de salida y sin pedido en camino. Crea una sesión de Stripe Checkout por el saldo
+ * de salida y sin pedido en camino. Crea una sesión de Recurrente Checkout por el saldo
  * completo; el webhook existente (sesión pagada) registra el pago APROBADO.
  */
 @Service
 public class PagoSaldoAppService {
 
-    private static final Duration DURACION_SESION = Duration.ofMinutes(31);
+    private static final Duration DURACION_SESION = Duration.ofMinutes(30);
 
     private final CheckoutService checkout;
     private final CuentaRepository cuentas;
     private final CuentaService cuentaService;
     private final PagoRepository pagos;
-    private final PasarelaStripe stripe;
+    private final PasarelaPagos pasarela;
     private final Clock reloj;
     private final String urlRetorno;
     private final JdbcTemplate jdbc;
 
     public PagoSaldoAppService(CheckoutService checkout, CuentaRepository cuentas, CuentaService cuentaService,
-            PagoRepository pagos, PasarelaStripe stripe, Clock reloj, PropiedadesVillaSerena propiedades, JdbcTemplate jdbc) {
+            PagoRepository pagos, PasarelaPagos pasarela, Clock reloj, PropiedadesVillaSerena propiedades, JdbcTemplate jdbc) {
         this.jdbc=jdbc;
         this.checkout = checkout;
         this.cuentas = cuentas;
         this.cuentaService = cuentaService;
         this.pagos = pagos;
-        this.stripe = stripe;
+        this.pasarela = pasarela;
         this.reloj = reloj;
-        this.urlRetorno = propiedades.stripe().urlRetornoApp();
+        this.urlRetorno = propiedades.recurrente().urlRetornoApp();
     }
 
     /** @return la sesión de pago, o vacío si el saldo ya es 0 (no se crea sesión). */
@@ -76,25 +76,25 @@ public class PagoSaldoAppService {
         if (saldo.signum() <= 0) {
             return Optional.empty();
         }
-        var pendiente=pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(),MetodoPago.STRIPE,EstadoPago.PENDIENTE);
+        var pendiente=pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(),MetodoPago.RECURRENTE,EstadoPago.PENDIENTE);
         if(pendiente.isPresent()){
-            var actual=stripe.obtenerSesion(pendiente.get().getStripeSessionId());
+            var actual=pasarela.obtenerSesion(pendiente.get().getCheckoutId());
             if(actual.abierta())return Optional.of(new PagoIniciado(actual.url(),actual.expiraEn()==null?null:OffsetDateTime.ofInstant(actual.expiraEn(),reloj.getZone())));
-            if(actual.pagada())throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Actualiza la cuenta antes de intentarlo de nuevo.");
+            if(actual.pagada() || "payment_in_progress".equals(actual.estado()))throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Actualiza la cuenta antes de intentarlo de nuevo.");
             pendiente.get().setEstado(EstadoPago.FALLIDO);
             pagos.saveAndFlush(pendiente.get());
         }
-        PasarelaStripe.Sesion sesion = stripe.crearSesion(
+        PasarelaPagos.Sesion sesion = pasarela.crearSesion(
                 "Saldo de la reserva " + reserva.getCodigo() + " — Hotel Villa Serena", saldo,
                 urlRetorno + "?codigo=" + reserva.getCodigo(), reloj.instant().plus(DURACION_SESION),
-                Map.of(PagoStripeService.META_CODIGO, reserva.getCodigo(),
-                        PagoStripeService.META_TIPO, PagoStripeService.TIPO_SALDO));
+                Map.of(PagoOnlineService.META_CODIGO, reserva.getCodigo(),
+                        PagoOnlineService.META_TIPO, PagoOnlineService.TIPO_SALDO));
         Pago pago = new Pago();
         pago.setCuentaId(cuenta.getId());
-        pago.setMetodo(MetodoPago.STRIPE);
+        pago.setMetodo(MetodoPago.RECURRENTE);
         pago.setEstado(EstadoPago.PENDIENTE);
         pago.setMonto(saldo);
-        pago.setStripeSessionId(sesion.id());
+        pago.setCheckoutId(sesion.id());
         pago.setCreadoEn(reloj.instant());
         pagos.save(pago);
         OffsetDateTime expira = sesion.expiraEn() == null ? null : OffsetDateTime.ofInstant(sesion.expiraEn(),

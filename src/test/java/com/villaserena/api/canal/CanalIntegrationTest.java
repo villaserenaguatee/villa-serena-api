@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.jayway.jsonpath.JsonPath;
 import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de OBJ-1C parte B (HU-CM-01): autenticación por clave, validaciones,
@@ -43,7 +43,7 @@ class CanalIntegrationTest {
     JdbcTemplate jdbc;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     private static String peticion(String identificador, String entrada, String salida, int huespedes) {
         return """

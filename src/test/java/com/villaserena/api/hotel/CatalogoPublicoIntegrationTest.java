@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.config.PropiedadesVillaSerena;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /** Pruebas de OBJ-1A: información pública del hotel y catálogo de tipos, sin sesión. */
 @SpringBootTest
@@ -42,7 +42,7 @@ class CatalogoPublicoIntegrationTest {
     PropiedadesVillaSerena propiedades;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     // ------------------------------------------------------ hotel (HU-HUE-01)
 

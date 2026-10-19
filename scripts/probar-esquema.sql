@@ -219,10 +219,10 @@ END $$;
 
 DO $$ BEGIN
   INSERT INTO pagos (cuenta_id, metodo, estado, monto)
-  SELECT c.id, 'STRIPE', 'PENDIENTE', 10.00 FROM cuentas c JOIN reservas r ON r.id = c.reserva_id
+  SELECT c.id, 'RECURRENTE', 'PENDIENTE', 10.00 FROM cuentas c JOIN reservas r ON r.id = c.reserva_id
   WHERE r.codigo = 'VS-PRB001';
-  RAISE EXCEPTION 'FALLO: pago STRIPE sin sesión aceptado';
-EXCEPTION WHEN check_violation THEN RAISE NOTICE 'OK: pago STRIPE sin sesión rechazado';
+  RAISE EXCEPTION 'FALLO: pago RECURRENTE sin sesión aceptado';
+EXCEPTION WHEN check_violation THEN RAISE NOTICE 'OK: pago RECURRENTE sin sesión rechazado';
 END $$;
 
 -- Solicitudes en la habitación P901 (reserva VS-PRB001)
@@ -274,11 +274,11 @@ DO $$ BEGIN
 EXCEPTION WHEN check_violation THEN RAISE NOTICE 'OK: clave de canal sin hash rechazada';
 END $$;
 
-INSERT INTO stripe_eventos (evento_id, tipo) VALUES ('evt_prueba', 'checkout.session.completed');
+INSERT INTO pago_eventos (evento_id, tipo) VALUES ('evt_prueba', 'intent.succeeded');
 DO $$ BEGIN
-  INSERT INTO stripe_eventos (evento_id, tipo) VALUES ('evt_prueba', 'checkout.session.completed');
-  RAISE EXCEPTION 'FALLO: evento de Stripe repetido aceptado';
-EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'OK: evento de Stripe repetido rechazado';
+  INSERT INTO pago_eventos (evento_id, tipo) VALUES ('evt_prueba', 'intent.succeeded');
+  RAISE EXCEPTION 'FALLO: evento de Recurrente repetido aceptado';
+EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'OK: evento de Recurrente repetido rechazado';
 END $$;
 
 ROLLBACK;

@@ -42,7 +42,7 @@ import com.villaserena.api.notificaciones.OutboxJob;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Criterio 3 de OBJ-4B: después del check-out, el Outbox envía el correo de la factura
@@ -102,7 +102,7 @@ class FacturaCorreoMailpitTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @AfterEach
     void reiniciarReloj() {

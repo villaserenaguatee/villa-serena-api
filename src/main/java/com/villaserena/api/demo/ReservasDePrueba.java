@@ -108,7 +108,7 @@ public class ReservasDePrueba implements ApplicationRunner {
         jdbc.update("UPDATE cuentas SET estado = 'CERRADA', cerrada_en = now() WHERE reserva_id = ?",
                 finalizada.getId());
 
-        // Web: una cancelada y dos pagadas con Stripe.
+        // Web: una cancelada y dos pagadas con Recurrente.
         Reserva cancelada = reservas.crear(SolicitudReserva.web(tipo("Estándar Jardín"), hoy.plusDays(5),
                 hoy.plusDays(7), 2, datos("Lucía Fernández", "lucia.fernandez@correo.test", GT, DPI,
                         "2345678900101")));
@@ -148,8 +148,8 @@ public class ReservasDePrueba implements ApplicationRunner {
             String habitacion, Responsable recepcion) {
         Reserva reserva = reservas.crear(SolicitudReserva.web(tipo(tipo), entrada, entrada.plusDays(noches),
                 personas, huesped));
-        pagar(reserva, "STRIPE", null);
-        reservas.confirmarPagoWeb(reserva, Responsable.STRIPE);
+        pagar(reserva, "RECURRENTE", null);
+        reservas.confirmarPagoWeb(reserva, Responsable.RECURRENTE);
         if (habitacion != null) {
             reservas.asignarHabitacion(reserva, habitacion(habitacion), recepcion);
         }
@@ -181,11 +181,11 @@ public class ReservasDePrueba implements ApplicationRunner {
         reservas.cambiarEstado(reserva, EstadoReserva.EN_ESTADIA, recepcion, null);
     }
 
-    /** Pago APROBADO por el total de la reserva; los de Stripe con una sesión ficticia de prueba. */
+    /** Pago APROBADO por el total de la reserva; los de Recurrente con una sesión ficticia de prueba. */
     private void pagar(Reserva reserva, String metodo, Long empleado) {
-        String sesion = "STRIPE".equals(metodo) ? "cs_test_demo_" + reserva.getCodigo() : null;
+        String sesion = "RECURRENTE".equals(metodo) ? "cs_test_demo_" + reserva.getCodigo() : null;
         jdbc.update("""
-                INSERT INTO pagos (cuenta_id, metodo, estado, monto, stripe_session_id, registrado_por_empleado_id,
+                INSERT INTO pagos (cuenta_id, metodo, estado, monto, checkout_id, registrado_por_empleado_id,
                                    aprobado_en)
                 SELECT id, ?, 'APROBADO', ?, ?, ?, now() FROM cuentas WHERE reserva_id = ?""",
                 metodo, reserva.getTotal(), sesion, empleado, reserva.getId());

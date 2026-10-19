@@ -20,7 +20,7 @@ import com.villaserena.api.reservas.dto.PagoIniciado;
 import com.villaserena.api.reservas.dto.ReservaWebCreada;
 import com.villaserena.api.reservas.dto.ReservaWebPeticion;
 import com.villaserena.api.reservas.dto.TipoHabitacionReferencia;
-import com.villaserena.api.reservas.stripe.PagoStripeService;
+import com.villaserena.api.reservas.pagos.PagoOnlineService;
 
 import jakarta.validation.Valid;
 
@@ -32,12 +32,12 @@ public class PublicoReservasController {
     private final IdempotenciaReservas idempotencia;
     private final DisponibilidadService disponibilidad;
     private final ReservaService reservas;
-    private final PagoStripeService pagos;
+    private final PagoOnlineService pagos;
     private final java.time.Clock reloj;
     private final VerificacionCorreoReserva verificacion;
 
     public PublicoReservasController(IdempotenciaReservas idempotencia, DisponibilidadService disponibilidad, ReservaService reservas,
-            PagoStripeService pagos, java.time.Clock reloj, VerificacionCorreoReserva verificacion) {
+            PagoOnlineService pagos, java.time.Clock reloj, VerificacionCorreoReserva verificacion) {
         this.idempotencia = idempotencia;
         this.disponibilidad = disponibilidad;
         this.reservas = reservas;

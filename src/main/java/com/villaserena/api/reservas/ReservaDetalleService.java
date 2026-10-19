@@ -94,7 +94,7 @@ public class ReservaDetalleService {
             case "EMPLEADO" -> empleado;
             case "CLIENTE" -> "Cliente web";
             case "CANAL" -> canal.name();
-            case "STRIPE" -> "Stripe";
+            case "RECURRENTE" -> "Recurrente";
             case "HUESPED" -> "Huésped";
             default -> "SISTEMA";
         };

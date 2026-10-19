@@ -34,7 +34,7 @@ import com.villaserena.api.estadia.CheckinService;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de OBJ-3A-1 parte A: menú, creación del pedido, cola, avance en orden,
@@ -69,7 +69,7 @@ class RoomServiceIntegrationTest {
     RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     String codigo;
     long huespedId;

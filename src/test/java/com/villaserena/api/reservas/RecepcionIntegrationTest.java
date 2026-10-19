@@ -35,8 +35,8 @@ import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
 import com.villaserena.api.huespedes.HuespedDatos;
 import com.villaserena.api.huespedes.TipoDocumento;
-import com.villaserena.api.reservas.stripe.ErrorStripe;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.ErrorPasarela;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /** Pruebas de OBJ-2B: reservas de Recepción, cancelación con reembolso y check-in. */
 @SpringBootTest
@@ -65,7 +65,7 @@ class RecepcionIntegrationTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     String recepcion;
     long huespedId;
@@ -145,7 +145,7 @@ class RecepcionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("CANCELADA"))
                 .andExpect(jsonPath("$.historial[2].motivo").value("Cambio de planes"));
-        verify(stripe).reembolsar("pi_prueba");
+        verify(pasarela).reembolsar("pi_prueba");
         assertThat(estadoPago(codigo)).isEqualTo("REEMBOLSADO");
         assertThat(estadoCuenta(codigo)).isEqualTo("CERRADA");
     }
@@ -182,9 +182,9 @@ class RecepcionIntegrationTest {
     }
 
     @Test
-    void siStripeRechazaElReembolsoNoSeCancela() throws Exception {
+    void siRecurrenteRechazaElReembolsoNoSeCancela() throws Exception {
         String codigo = reservaWebPagada("2026-10-20");
-        doThrow(new ErrorStripe("rechazado")).when(stripe).reembolsar(anyString());
+        doThrow(new ErrorPasarela("rechazado")).when(pasarela).reembolsar(anyString());
 
         cancelar(codigo, "Cambio de planes")
                 .andExpect(status().isConflict())
@@ -243,15 +243,28 @@ class RecepcionIntegrationTest {
 
     // ------------------------------------------------------------ apoyo
 
-    /** Reserva web confirmada con un pago de Stripe aprobado (como si ya hubiera llegado el webhook). */
+    /** Reserva web confirmada con un pago de Recurrente aprobado (como si ya hubiera llegado el webhook). */
+    @Test
+    void pagoHistoricoNoSeReembolsaConElProveedorNuevo() throws Exception {
+        String codigo = reservaWebPagada("2026-10-20");
+        jdbc.update("UPDATE pagos SET metodo = 'STRIPE' WHERE checkout_id = 'cs_prueba'");
+        cancelar(codigo, "Cambio de planes")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("PAGO_LEGADO_REQUIERE_CONCILIACION"));
+        org.mockito.Mockito.verifyNoInteractions(pasarela);
+        assertThat(estadoPago(codigo)).isEqualTo("APROBADO");
+        assertThat(jdbc.queryForObject("SELECT estado FROM reservas WHERE codigo = ?", String.class, codigo))
+                .isEqualTo("CONFIRMADA");
+    }
+
     private String reservaWebPagada(String entrada) {
         Reserva r = reservaService.crear(SolicitudReserva.web(tipoId("Doble Superior"), LocalDate.parse(entrada),
                 LocalDate.parse(entrada).plusDays(2), 2, new HuespedDatos("Web Pagada", "web.pagada@correo.test",
                         "+502 5555 3333", "Guatemalteca", TipoDocumento.DPI, "3333333330101")));
-        reservaService.cambiarEstado(r, EstadoReserva.CONFIRMADA, com.villaserena.api.comun.Responsable.STRIPE, null);
+        reservaService.cambiarEstado(r, EstadoReserva.CONFIRMADA, com.villaserena.api.comun.Responsable.RECURRENTE, null);
         jdbc.update("""
-                INSERT INTO pagos (cuenta_id, metodo, estado, monto, stripe_session_id, stripe_payment_intent_id, aprobado_en)
-                SELECT id, 'STRIPE', 'APROBADO', ?, 'cs_prueba', 'pi_prueba', now() FROM cuentas WHERE reserva_id = ?""",
+                INSERT INTO pagos (cuenta_id, metodo, estado, monto, checkout_id, pago_externo_id, aprobado_en)
+                SELECT id, 'RECURRENTE', 'APROBADO', ?, 'cs_prueba', 'pi_prueba', now() FROM cuentas WHERE reserva_id = ?""",
                 r.getTotal(), r.getId());
         return r.getCodigo();
     }

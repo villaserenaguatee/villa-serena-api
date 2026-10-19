@@ -36,7 +36,7 @@ import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de las incidencias y sus fotos (OBJ-3B-1, parte B). Luis es de LIMPIEZA,
@@ -71,7 +71,7 @@ class IncidenciasIntegrationTest {
     AlmacenEnMemoria.Almacen almacen;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     String recepcion;
     String luis;

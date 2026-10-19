@@ -40,7 +40,7 @@ import com.villaserena.api.estadia.CheckinService;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de la factura (OBJ-4B) a través del check-out real de Recepción. "Hoy" es el
@@ -87,7 +87,7 @@ class FacturaIntegrationTest {
     AlmacenEnMemoria.Almacen almacen;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     long recepcionistaId;
     String recepcion;
