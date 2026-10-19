@@ -57,3 +57,9 @@ Los reembolsos usan `intent_id` y una llave idempotente estable; solo `status: s
 Flyway V27 renombra las columnas de pasarela y la tabla de eventos, agrega `RECURRENTE` y conserva los pagos y responsables históricos `STRIPE`. No convierte cobros históricos en cobros de Recurrente ni los envía a su API. Si su cancelación requiere reembolso, responde `PAGO_LEGADO_REQUIERE_CONCILIACION` y conserva la reserva hasta conciliar con el proveedor original. Antes de migrar una instalación con checkouts Stripe aún pendientes, deben conciliarse con el proveedor anterior. Web y app deben actualizar sus copias de OpenAPI y aceptar `RECURRENTE` en los métodos de pago.
 
 Validación automática: `./mvnw test` usa PostgreSQL 17 mediante Testcontainers; `PasarelaRecurrenteClientTest` valida el contrato HTTP y firmas con datos ficticios. La prueba completa en Sandbox requiere claves configuradas y un endpoint registrado en Recurrente.
+
+## Movimientos de insumos
+
+`GET` y `POST /api/v1/gestion/movimientos` usan el módulo `inventario`: un controlador específico adapta el JSON existente, `MovimientosInsumosService` coordina la transacción, `MovimientoInsumoPeticion` convierte los datos a campos tipados y `MovimientoInsumo` aplica las reglas sin depender de Spring. El adaptador JDBC conserva las tablas, versiones, auditoría y bloqueos existentes, incluidos los compartidos con compras y órdenes.
+
+La petición conserva el envoltorio `{id, version, datos}` y sus campos adicionales por compatibilidad con la web. El servicio comprueba reenvíos y versiones antes de interpretar el movimiento. Un movimiento ya registrado es inmutable; su reenvío idéntico devuelve el registro original sin modificar nuevamente las existencias. Solo Administración puede consultar o registrar movimientos. La prueba `MovimientosInsumosIntegrationTest` cubre esos comportamientos, rollback y solicitudes concurrentes sobre PostgreSQL 17.
