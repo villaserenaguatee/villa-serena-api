@@ -218,6 +218,17 @@ class ReservaWebIntegrationTest {
         assertThat(reservas.findByCodigo(codigo).orElseThrow().getEstado()).isEqualTo(EstadoReserva.PENDIENTE_PAGO);
     }
 
+    @Test
+    void creaReservaWebSinNacionalidadYConservaElPerfilHistorico() throws Exception {
+        crearReserva(tipoId("Estándar Jardín"), "2026-10-20", "2026-10-22", "nuevo@correo.test", 201);
+        assertThat(jdbc.queryForObject("SELECT nacionalidad FROM huespedes WHERE correo = 'nuevo@correo.test'",
+                String.class)).isNull();
+        jdbc.update("UPDATE huespedes SET nacionalidad = 'Mexicana' WHERE correo = 'nuevo@correo.test'");
+        crearReserva(tipoId("Estándar Jardín"), "2026-10-23", "2026-10-24", "nuevo@correo.test", 201);
+        assertThat(jdbc.queryForObject("SELECT nacionalidad FROM huespedes WHERE correo = 'nuevo@correo.test'",
+                String.class)).isEqualTo("Mexicana");
+    }
+
     private String iniciarPago(String sesionId) throws Exception {
         String cuerpo = crearReserva(tipoId("Estándar Jardín"), "2026-10-20", "2026-10-22",
                 sesionId + "@correo.test", 201);
@@ -245,7 +256,7 @@ class ReservaWebIntegrationTest {
         String json = """
                 {"tipoHabitacionId": %d, "entrada": "%s", "salida": "%s", "numeroHuespedes": 1,
                  "huesped": {"nombreCompleto": "Cliente Prueba", "correo": "%s", "telefono": "+502 5555 0000",
-                             "nacionalidad": "Guatemalteca", "tipoDocumento": "DPI", "numeroDocumento": "1234567890101"}}"""
+                             "tipoDocumento": "DPI", "numeroDocumento": "1234567890101"}}"""
                 .formatted(tipoId, LocalDate.parse(entrada), LocalDate.parse(salida), correo);
         UUID borrador = UUID.randomUUID();
         return mvc.perform(post("/api/v1/publico/reservas").contentType(MediaType.APPLICATION_JSON).content(json)

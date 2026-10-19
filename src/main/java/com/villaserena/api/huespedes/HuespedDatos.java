@@ -5,12 +5,12 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
-/** Los 6 datos obligatorios del huésped principal (esquema {@code HuespedDatos}). */
+/** Datos del huésped principal; nacionalidad opcional (esquema {@code HuespedDatos}). */
 public record HuespedDatos(
         @NotBlank(message = "El nombre es obligatorio.") @Size(max = 150) String nombreCompleto,
         @NotBlank(message = "El correo es obligatorio.") @Email(message = "El correo no tiene un formato válido.") @Size(max = 150) String correo,
         @NotBlank(message = "El teléfono es obligatorio.") @Size(max = 30) @jakarta.validation.constraints.Pattern(regexp="\\+?[0-9][0-9 ()-]*", message="El teléfono solo admite números, prefijo internacional y separadores.") String telefono,
-        @NotBlank(message = "La nacionalidad es obligatoria.") @Size(max = 60) String nacionalidad,
+        @Size(max = 60) String nacionalidad,
         @NotNull(message = "El tipo de documento es obligatorio.") TipoDocumento tipoDocumento,
         @NotBlank(message = "El número de documento es obligatorio.") @Size(max = 30) String numeroDocumento,
         @Size(max = 2) String paisEmisorPasaporte) {
@@ -18,6 +18,7 @@ public record HuespedDatos(
         this(nombreCompleto,correo,telefono,nacionalidad,tipoDocumento,numeroDocumento,null);
     }
     public HuespedDatos {
+        nacionalidad = nacionalidad == null || nacionalidad.isBlank() ? null : nacionalidad.trim();
         correo = correo == null ? null : correo.trim();
         telefono = telefono == null ? null : telefono.trim();
         numeroDocumento = numeroDocumento == null ? null : numeroDocumento.trim();
