@@ -270,6 +270,56 @@ class CheckoutIntegrationTest {
                 .andExpect(jsonPath("$.codigo").value("FUERA_DE_HORARIO"));
     }
 
+    @Test
+    void consultaPagoSaldoExigeTitularYRespetaVentanaSaldoYPedidos() throws Exception {
+        String huesped = tokenHuesped(huespedId);
+        String ruta = "/api/v1/app/reservas/" + codigo + "/pago-saldo/estado";
+        mvc.perform(get(ruta)).andExpect(status().isUnauthorized());
+        mvc.perform(get(ruta).header("Authorization", recepcion)).andExpect(status().isForbidden());
+        long otroHuesped = jdbc.queryForObject("""
+                INSERT INTO huespedes(nombre_completo,correo,telefono,tipo_documento,numero_documento)
+                VALUES('Otro huésped','otro-saldo@correo.test','+502 5555 0001','DPI','1234567890102') RETURNING id
+                """, Long.class);
+        mvc.perform(get(ruta).header("Authorization", tokenHuesped(otroHuesped)))
+                .andExpect(status().isNotFound());
+        mvc.perform(get(ruta).header("Authorization", huesped))
+                .andExpect(jsonPath("$.accionPago").value("NINGUNA"));
+        reloj.fijar(SALIDA_10AM);
+        mvc.perform(get(ruta).header("Authorization", huesped))
+                .andExpect(jsonPath("$.accionPago").value("INICIAR"));
+        jdbc.update("INSERT INTO pedidos (reserva_id,estado) SELECT id,'EN_CAMINO' FROM reservas WHERE codigo=?", codigo);
+        mvc.perform(get(ruta).header("Authorization", huesped))
+                .andExpect(jsonPath("$.accionPago").value("NINGUNA"));
+    }
+
+    @Test
+    void consultaSaldoProcesandoseImpideOtroCobroYPermiteCargosPosteriores() throws Exception {
+        String huesped = tokenHuesped(huespedId);
+        reloj.fijar(SALIDA_10AM);
+        when(pasarela.crearSesion(anyString(), any(), anyString(), any(), any()))
+                .thenReturn(new PasarelaPagos.Sesion("ch_consulta_saldo", "https://pago.test", "unpaid", false,
+                        null, SALIDA_10AM.plusSeconds(1800)));
+        mvc.perform(post("/api/v1/app/reservas/{c}/pago-saldo", codigo).header("Authorization", huesped))
+                .andExpect(status().isOk());
+        when(pasarela.obtenerSesion("ch_consulta_saldo")).thenReturn(new PasarelaPagos.Sesion(
+                "ch_consulta_saldo", null, "payment_in_progress", false, null, null));
+        mvc.perform(get("/api/v1/app/reservas/{c}/pago-saldo/estado", codigo).header("Authorization", huesped))
+                .andExpect(jsonPath("$.estadoCheckout").value("PROCESANDO"))
+                .andExpect(jsonPath("$.accionPago").value("ESPERAR"))
+                .andExpect(jsonPath("$.puedeReintentar").value(false));
+        mvc.perform(post("/api/v1/app/reservas/{c}/pago-saldo", codigo).header("Authorization", huesped))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.codigo").value("PAGO_EN_VERIFICACION"));
+        when(pasarela.verificarEvento(anyString(), any())).thenReturn(new PasarelaPagos.Evento("evt_consulta_saldo",
+                "intent.succeeded", new PasarelaPagos.Sesion("ch_consulta_saldo", null, "paid", true, "in_saldo", null)));
+        mvc.perform(post("/api/v1/pagos/recurrente/webhook").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/app/reservas/{c}/pago-saldo/estado", codigo).header("Authorization", huesped))
+                .andExpect(jsonPath("$.accionPago").value("NINGUNA"));
+        agregarCargo("Consumo posterior", 1, "20.00").andExpect(status().isCreated());
+        mvc.perform(get("/api/v1/app/reservas/{c}/pago-saldo/estado", codigo).header("Authorization", huesped))
+                .andExpect(jsonPath("$.accionPago").value("INICIAR"));
+    }
+
     // -------------------------------------------------------------- apoyo
 
     private ResultActions agregarCargo(String concepto, int cantidad, String precio) throws Exception {
