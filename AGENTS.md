@@ -92,7 +92,7 @@ Las piezas compartidas se mantienen como acuerdos del equipo, sin exclusividad p
 | Pieza | Resultado esperado y coordinación |
 |---|---|
 | Migraciones de Flyway | Los cambios de esquema se coordinan mediante issues y PR para evitar colisiones de versiones. Las migraciones ya aplicadas se conservan; la evolución utiliza migraciones nuevas. |
-| `openapi.yaml` | El contrato refleja los endpoints y DTO acordados. Los cambios consideran sus consumidores y se coordinan con API, web y app; cada frontend actualiza su copia y sus tipos. |
+| Contrato OpenAPI | El único YAML canónico vive en `villa-serena-docs/openapi.yaml`. Sus cambios se tramitan mediante issues/PR de docs y se coordinan con API, web y app. Cada consumidor fija una revisión y actualiza su implementación o sus tipos; no mantiene otra copia YAML/JSON. |
 | Spring Security | La configuración existente se reutiliza y los cambios de rutas o permisos incluyen verificación de acceso. |
 | Cliente de tiempo real de la web | Las pantallas reutilizan el cliente compartido, con una conexión por pestaña y suscripciones autorizadas. |
 
@@ -112,6 +112,16 @@ Spring Boot 4.1, paquete raíz `com.villaserena.api` y módulos según el docume
 
 Los endpoints siguen `/api/v1/...`. Las respuestas utilizan DTO con los datos permitidos para cada rol. Las reglas del negocio se aplican en Spring y, cuando corresponde, en la base de datos.
 
+`api-contract.json` fija el repositorio y SHA completo de docs. Su checkout se
+indica con `--docs` o `VILLA_SERENA_DOCS_DIR`; otra revisión o cambios locales se
+rechazan. La guía [docs/CONTRATO_API.md](docs/CONTRATO_API.md) describe la comprobación.
+Spring exporta su implementación solo como artefacto temporal de pruebas en
+`target/openapi-spring.json`; no sustituye al canónico ni genera Java desde él.
+La comparación actual de rutas/métodos es diagnóstica mientras se reconcilian las
+diferencias registradas. Pasarla no acredita DTO, validaciones ni permisos, que
+requieren sus pruebas de integración. No se cambian reglas ni se omiten rutas para
+simular conformidad.
+
 Comando de arranque local: `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`, cuando el perfil esté configurado. Flyway aplica el esquema y los datos iniciales.
 
 Para verificar el API desde las computadoras del equipo de frontend, el agente puede ofrecer un **Cloudflare Tunnel temporal**. Su uso se acuerda con la persona, mantiene la autenticación y limita la exposición a los servicios necesarios. La URL y las condiciones de acceso se comparten por el canal del equipo; no se publican credenciales en issues. El túnel se cierra al terminar las pruebas y no equivale a un despliegue de producción.
@@ -122,7 +132,8 @@ Next.js 15 aplica el patrón **BFF**: las peticiones HTTP de la web al API pasan
 
 El **WebSocket es una excepción explícita**: el navegador conecta directamente con Spring mediante un ticket de un solo uso y 60 segundos obtenido a través del BFF. El JWT del personal permanece fuera del navegador (documento 14, sección 6.1).
 
-Los tipos se generan con `openapi-typescript` desde la copia local de `openapi.yaml`.
+Los tipos se generan desde el checkout fijado de docs con su herramienta
+`scripts/contrato-api.mjs types`; pueden versionarse los tipos, no una copia YAML.
 
 Comando de arranque: `pnpm dev` (`http://localhost:3000`).
 

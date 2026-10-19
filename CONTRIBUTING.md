@@ -1,6 +1,6 @@
 # Contribuir a Villa Serena API
 
-Esta guía describe cómo trabajar una issue de la API, desde su preparación hasta el cierre. Consulta también [README.md](README.md), el contrato `openapi.yaml` cuando esté integrado en la rama de trabajo y las historias y reglas en `villa-serena-docs`.
+Esta guía describe cómo trabajar una issue de la API, desde su preparación hasta el cierre. Consulta también [README.md](README.md), el contrato canónico de `villa-serena-docs` fijado en `api-contract.json` y las historias y reglas de ese repositorio. La [guía de adopción](docs/CONTRATO_API.md) describe su comprobación.
 
 Al participar en el proyecto, sigue el [Código de conducta](CODE_OF_CONDUCT.md).
 
@@ -54,7 +54,7 @@ Si utilizas IA, dale la issue y las referencias necesarias, revisa su propuesta 
 - Usa Java 21 y el Maven Wrapper del repositorio. Consulta el [README](README.md) y la guía de arranque en `villa-serena-docs` para preparar el entorno.
 - Ejecuta `./mvnw test` (Windows: `mvnw.cmd test`). Las pruebas con Testcontainers necesitan Docker disponible. Indica si una comprobación no pudo ejecutarse y por qué.
 - Para cambios de base de datos, valida las migraciones y ejecuta [scripts/probar-esquema.sql](scripts/probar-esquema.sql) según el README, en una base de desarrollo. Coordina la numeración de Flyway y no modifiques migraciones que ya se hayan aplicado en entornos compartidos; agrega una nueva.
-- Si cambia un endpoint, coordina la actualización de `openapi.yaml` y de la documentación de endpoints y cobertura que exista en la rama de trabajo. Si el contrato todavía no está integrado, enlaza su PR como dependencia. Describe el impacto en web y móvil y enlaza sus tareas.
+- Si cambia un endpoint o DTO, coordina una issue/PR en docs para actualizar su `openapi.yaml` canónico. Después actualiza deliberadamente la revisión de `api-contract.json` y comprueba la implementación. No copies YAML/JSON al API. Describe el impacto en web y móvil y enlaza sus tareas. La exportación de Spring es evidencia temporal; la comparación de rutas no sustituye las pruebas de validación, respuestas y permisos.
 - Comprueba casos válidos, errores y permisos relevantes para la issue. Adjunta la petición y respuesta de ejemplo sin secretos.
 
 ## 4. Guardar y abrir el pull request

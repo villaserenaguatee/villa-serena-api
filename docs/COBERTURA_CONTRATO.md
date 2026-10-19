@@ -1,5 +1,8 @@
 # Cobertura de historias — contrato completo
 
+> Cobertura histórica del diseño, no comprobación vigente. Para el contrato
+> canónico y sus diferencias con Spring, ver [CONTRATO_API.md](CONTRATO_API.md).
+
 Cada historia V3 tiene operación HTTP o mecanismo explícito. La cobertura describe el diseño, no confirma implementación. Nivel 2 permanece opcional.
 
 | Historia | Nombre | Nivel | Operaciones / mecanismo | RF |

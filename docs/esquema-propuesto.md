@@ -2,7 +2,7 @@
 
 > **Objetivo:** OBJ-0C — API: esquema y datos iniciales (PASO 1, propuesta)
 > **Estado:** ✅ Aprobado por Josué el 1 de octubre de 2026
-> **Fuentes:** documentos 07, 08, 10 y 14 (Documentación V3), `HU - Administrador.md` y el contrato `openapi.yaml` (PR #2)
+> **Fuentes históricas:** documentos 07, 08, 10 y 14 (Documentación V3), `HU - Administrador.md` y el contrato original (PR #2). El canónico ahora vive en docs; ver [adopción actual](CONTRATO_API.md).
 > **Siguiente paso:** PASO 2 — migraciones Flyway (`V1__esquema.sql` y las que hagan falta) con base en este documento
 
 No incluye tablas de Nivel 2 (turnos, inventario, amenidades ni Wi-Fi).

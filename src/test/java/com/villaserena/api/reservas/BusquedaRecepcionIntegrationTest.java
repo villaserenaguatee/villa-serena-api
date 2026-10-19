@@ -40,6 +40,8 @@ import com.villaserena.api.auth.TokenService;
 import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 import jakarta.persistence.EntityManager;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Pruebas de OBJ-2A: huéspedes, huéspedes adicionales, búsqueda de reservas, detalle y
@@ -69,6 +71,9 @@ class BusquedaRecepcionIntegrationTest {
 
     @Autowired
     EntityManager entityManager;
+
+    @Autowired
+    ObjectMapper json;
 
     @MockitoBean
     PasarelaPagos pasarela;
@@ -112,6 +117,25 @@ class BusquedaRecepcionIntegrationTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("DATOS_INVALIDOS"))
                 .andExpect(jsonPath("$.detalles[*].campo", hasItem("correo")));
+    }
+
+    /** Subconjunto acordado de HuespedDatos: cada campo requerido se comprueba por HTTP. */
+    @ParameterizedTest
+    @ValueSource(strings = {"nombreCompleto", "correo", "telefono", "tipoDocumento", "numeroDocumento"})
+    void cadaCampoRequeridoDelContratoRechazaOmisionYNulo(String campo) throws Exception {
+        ObjectNode body = (ObjectNode) json.readTree(huespedJson("Contrato Huésped", "contrato@correo.test",
+                "1234567890101"));
+        int anteriores = jdbc.queryForObject("SELECT count(*) FROM huespedes", Integer.class);
+        body.remove(campo);
+        for (int variante = 0; variante < 2; variante++) {
+            if (variante == 1) body.putNull(campo);
+            mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
+                            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.codigo").value("DATOS_INVALIDOS"))
+                    .andExpect(jsonPath("$.detalles[*].campo", hasItem(campo)));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM huespedes", Integer.class)).isEqualTo(anteriores);
     }
 
     @ParameterizedTest

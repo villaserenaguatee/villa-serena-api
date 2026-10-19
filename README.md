@@ -2,6 +2,19 @@
 
 API de Villa Serena (Spring Boot 4.1, Java 21, PostgreSQL 17 + Flyway). Ver `AGENTS.md` y la documentación en `villa-serena-docs`.
 
+## Contrato y verificación
+
+El único contrato canónico está en [villa-serena-docs](https://github.com/villaserenaguatee/villa-serena-docs/blob/main/openapi.yaml).
+`api-contract.json` fija su revisión para local y CI. No se mantiene una copia YAML/JSON en API.
+La [guía de adopción](docs/CONTRATO_API.md) contiene los comandos, la configuración
+del checkout y el seguimiento de las diferencias. Las peticiones de negocio no
+descargan ni generan el contrato.
+
+`./mvnw -B verify` prueba y empaqueta el API, y exporta su OpenAPI a
+`target/openapi-spring.json`. La comparación con docs se ejecuta por separado:
+es diagnóstica hasta reconciliar las operaciones; las comprobaciones de revisión,
+herramientas, DTO y permisos sí son obligatorias en CI.
+
 ## Migraciones y datos de demostración
 
 | Carpeta | Contenido | Cuándo se aplica |
@@ -54,7 +67,7 @@ La [guía oficial de webhooks](https://docs.recurrente.com/guias-espanol/comenza
 
 Los reembolsos usan `intent_id` y una llave idempotente estable; solo `status: succeeded` permite cancelar con reembolso. Una respuesta pendiente requiere consultar/reintentar la operación, sin marcarla como reembolsada.
 
-Flyway V27 renombra las columnas de pasarela y la tabla de eventos, agrega `RECURRENTE` y conserva los pagos y responsables históricos `STRIPE`. No convierte cobros históricos en cobros de Recurrente ni los envía a su API. Si su cancelación requiere reembolso, responde `PAGO_LEGADO_REQUIERE_CONCILIACION` y conserva la reserva hasta conciliar con el proveedor original. Antes de migrar una instalación con checkouts Stripe aún pendientes, deben conciliarse con el proveedor anterior. Web y app deben actualizar sus copias de OpenAPI y aceptar `RECURRENTE` en los métodos de pago.
+Flyway V27 renombra las columnas de pasarela y la tabla de eventos, agrega `RECURRENTE` y conserva los pagos y responsables históricos `STRIPE`. No convierte cobros históricos en cobros de Recurrente ni los envía a su API. Si su cancelación requiere reembolso, responde `PAGO_LEGADO_REQUIERE_CONCILIACION` y conserva la reserva hasta conciliar con el proveedor original. Antes de migrar una instalación con checkouts Stripe aún pendientes, deben conciliarse con el proveedor anterior. El contrato de docs debe reconciliar esa transición y web/app adoptar su revisión y tipos con `RECURRENTE`.
 
 Validación automática: `./mvnw test` usa PostgreSQL 17 mediante Testcontainers; `PasarelaRecurrenteClientTest` valida el contrato HTTP y firmas con datos ficticios. La prueba completa en Sandbox requiere claves configuradas y un endpoint registrado en Recurrente.
 
@@ -81,5 +94,4 @@ reserva; cambiar la hora con la misma `Idempotency-Key` responde 409
 
 El contrato canónico se mantiene en el repositorio de docs; su actualización y la
 conexión del campo en la web se coordinan en [docs #22](https://github.com/villaserenaguatee/villa-serena-docs/issues/22).
-La copia histórica de OpenAPI de este repositorio no
-se actualiza como otra fuente de verdad (seguimiento de su retirada: #58).
+El API consume la revisión de docs fijada en `api-contract.json` (adopción #58).
