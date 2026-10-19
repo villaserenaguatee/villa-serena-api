@@ -1,6 +1,6 @@
 # Endpoints y autenticación — Villa Serena
 
-Propuesta completa del 3 de octubre de 2026. Rama `obj0-contrato-completo`. Fuente principal: [openapi.yaml](../openapi.yaml). No está congelada y no afirma que los endpoints estén implementados. Josué, Pablo y Hugo deben revisar sus módulos.
+> Referencia histórica del 3 de octubre de 2026, no inventario vigente de la implementación. El contrato canónico vive en [docs](https://github.com/villaserenaguatee/villa-serena-docs/blob/main/openapi.yaml); ver [adopción y diferencias actuales](CONTRATO_API.md). La rama original fue `obj0-contrato-completo`.
 
 **Método HTTP y autenticación son distintos:** un GET puede exigir JWT. `security: []` indica que no se exige JWT, pero login requiere contraseña, verificación requiere OTP y renovación requiere refresh válido. Canal y Stripe usan credenciales propias.
 
