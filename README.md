@@ -63,3 +63,23 @@ Validación automática: `./mvnw test` usa PostgreSQL 17 mediante Testcontainers
 `GET` y `POST /api/v1/gestion/movimientos` usan el módulo `inventario`: un controlador específico adapta el JSON existente, `MovimientosInsumosService` coordina la transacción, `MovimientoInsumoPeticion` convierte los datos a campos tipados y `MovimientoInsumo` aplica las reglas sin depender de Spring. El adaptador JDBC conserva las tablas, versiones, auditoría y bloqueos existentes, incluidos los compartidos con compras y órdenes.
 
 La petición conserva el envoltorio `{id, version, datos}` y sus campos adicionales por compatibilidad con la web. El servicio comprueba reenvíos y versiones antes de interpretar el movimiento. Un movimiento ya registrado es inmutable; su reenvío idéntico devuelve el registro original sin modificar nuevamente las existencias. Solo Administración puede consultar o registrar movimientos. La prueba `MovimientosInsumosIntegrationTest` cubre esos comportamientos, rollback y solicitudes concurrentes sobre PostgreSQL 17.
+
+## Hora estimada de llegada (issue #57)
+
+La creación pública por tipo (`POST /api/v1/publico/reservas`) y por oferta
+(`POST /api/v1/publico/ofertas/{slug}/reservas`) acepta `horaEstimadaLlegada`,
+opcional, como cadena `HH:mm` de `00:00` a `23:59`, por ejemplo `"18:30"`.
+Omitirla o enviar `null` significa sin indicar; una cadena vacía, segundos o zona
+horaria responden 400 `DATOS_INVALIDOS`. Es una hora local de `America/Guatemala`,
+independiente de la política y las validaciones del check-in.
+
+`GET /api/v1/reservas/{codigo}`, autorizado para Recepción, devuelve el campo con
+el mismo formato o `null`. Flyway V28 agrega una columna nullable sin valor por
+defecto ni actualización de reservas históricas. Un reenvío idéntico conserva la
+reserva; cambiar la hora con la misma `Idempotency-Key` responde 409
+`BOOKING_REQUEST_CONFLICT`. Los reintentos anteriores sin hora siguen siendo válidos.
+
+El contrato canónico se mantiene en el repositorio de docs; su actualización y la
+conexión del campo en la web se coordinan en [docs #22](https://github.com/villaserenaguatee/villa-serena-docs/issues/22).
+La copia histórica de OpenAPI de este repositorio no
+se actualiza como otra fuente de verdad (seguimiento de su retirada: #58).
