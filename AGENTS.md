@@ -1,5 +1,18 @@
 # AGENTS.md — Acuerdos de trabajo con IA en Villa Serena
 
+## Ponytail
+
+Para trabajar en este repositorio, usa Ponytail en modo `full` por defecto y lee
+[su skill principal](.agents/skills/ponytail/SKILL.md) antes de actuar. Si la persona
+lo desactiva o cambia el nivel, respeta esa elección durante la sesión.
+
+Ponytail complementa estos acuerdos: prevalecen las instrucciones de la persona,
+las reglas específicas del proyecto y la comunicación en español, también en las
+revisiones y auditorías. No elimina capas, interfaces o controles acordados por
+reducir código. Las skills de revisión y auditoría producen informes; no autorizan
+cambios adicionales. La [guía local](.agents/README.md) explica su uso, procedencia
+y diferencias respecto al plugin personal.
+
 > Esta es la plantilla compartida de instrucciones para los cinco repositorios. Su ubicación de uso es la raíz de cada repositorio; `CLAUDE.md` remite a ella mediante `@AGENTS.md`.
 
 ## 1. Proyecto y resultado esperado
