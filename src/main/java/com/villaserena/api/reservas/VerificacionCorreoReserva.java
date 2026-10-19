@@ -115,12 +115,30 @@ public class VerificacionCorreoReserva {
         return Map.of("verificado",true,"comprobante",receipt,"expiraEn",1800);
     }
     @Transactional
-    public void consumir(String address,String draft,String receipt) {
+    public UUID consumir(String address,String draft,String receipt) {
         if(draft==null || receipt==null || !receipt.matches("[A-Za-z0-9_-]{43}")) throw requerida();
         final UUID draftId; try { draftId=UUID.fromString(draft); } catch(IllegalArgumentException e) { throw requerida(); }
         String email=correo(address); lock(email);
-        int changed=jdbc.update("UPDATE reserva_correo_verificaciones SET consumido_en=? WHERE correo=? AND borrador=? AND comprobante_hash=? AND verificado_en IS NOT NULL AND consumido_en IS NULL AND comprobante_expira_en>?",ts(clock.instant()),email,draftId,hash(receipt),ts(clock.instant()));
-        if(changed!=1) throw requerida();
+        var ids=jdbc.queryForList("UPDATE reserva_correo_verificaciones SET consumido_en=? WHERE correo=? AND borrador=? AND comprobante_hash=? AND verificado_en IS NOT NULL AND consumido_en IS NULL AND comprobante_expira_en>? RETURNING id",UUID.class,ts(clock.instant()),email,draftId,hash(receipt),ts(clock.instant()));
+        if(ids.size()!=1) throw requerida();
+        return ids.getFirst();
+    }
+    /** Admite renovar el comprobante para el mismo correo y borrador, sin consumirlo otra vez. */
+    @Transactional(readOnly=true)
+    public boolean autorizaRecuperacion(UUID original, String draft, String receipt) {
+        if (original == null || draft == null || receipt == null || !receipt.matches("[A-Za-z0-9_-]{43}")) return false;
+        final UUID draftId;
+        try { draftId=UUID.fromString(draft); } catch(IllegalArgumentException e) { return false; }
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM reserva_correo_verificaciones original
+                    JOIN reserva_correo_verificaciones actual
+                      ON actual.correo=original.correo AND actual.borrador=original.borrador
+                    WHERE original.id=? AND original.consumido_en IS NOT NULL
+                      AND actual.borrador=? AND actual.comprobante_hash=?
+                      AND actual.verificado_en IS NOT NULL AND actual.comprobante_expira_en>?
+                )
+                """, Boolean.class, original, draftId, hash(receipt), ts(clock.instant())));
     }
     private static ApiException requerida() { return new ApiException(HttpStatus.FORBIDDEN,"CORREO_NO_VERIFICADO","Verifica tu correo antes de crear la reserva."); }
 }

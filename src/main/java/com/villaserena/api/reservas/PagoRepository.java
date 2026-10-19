@@ -19,5 +19,5 @@ public interface PagoRepository extends JpaRepository<Pago, Long> {
 
     Optional<Pago> findFirstByCuentaIdAndMetodoAndEstado(Long cuentaId, MetodoPago metodo, EstadoPago estado);
 
-    Optional<Pago> findFirstByCuentaIdAndMetodoOrderByCreadoEnDesc(Long cuentaId, MetodoPago metodo);
+    Optional<Pago> findFirstByCuentaIdAndMetodoOrderByCreadoEnDescIdDesc(Long cuentaId, MetodoPago metodo);
 }

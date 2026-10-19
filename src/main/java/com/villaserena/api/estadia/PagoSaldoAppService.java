@@ -24,6 +24,9 @@ import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.dto.PagoIniciado;
 import com.villaserena.api.reservas.pagos.PagoOnlineService;
 import com.villaserena.api.reservas.pagos.PasarelaPagos;
+import com.villaserena.api.reservas.pagos.ConsultaProcesoPago;
+import com.villaserena.api.reservas.pagos.ErrorPasarela;
+import com.villaserena.api.reservas.dto.ProcesoPago;
 
 /**
  * Pago del saldo desde la app (HU-HUE-16): solo EN_ESTADIA, de 00:00 a 12:00 del día
@@ -43,9 +46,12 @@ public class PagoSaldoAppService {
     private final Clock reloj;
     private final String urlRetorno;
     private final JdbcTemplate jdbc;
+    private final ConsultaProcesoPago consulta;
 
     public PagoSaldoAppService(CheckoutService checkout, CuentaRepository cuentas, CuentaService cuentaService,
-            PagoRepository pagos, PasarelaPagos pasarela, Clock reloj, PropiedadesVillaSerena propiedades, JdbcTemplate jdbc) {
+            PagoRepository pagos, PasarelaPagos pasarela, Clock reloj, PropiedadesVillaSerena propiedades, JdbcTemplate jdbc,
+            ConsultaProcesoPago consulta) {
+        this.consulta = consulta;
         this.jdbc=jdbc;
         this.checkout = checkout;
         this.cuentas = cuentas;
@@ -54,6 +60,20 @@ public class PagoSaldoAppService {
         this.pasarela = pasarela;
         this.reloj = reloj;
         this.urlRetorno = propiedades.recurrente().urlRetornoApp();
+    }
+
+    @Transactional(readOnly = true)
+    public ProcesoPago estado(Reserva reserva) {
+        Cuenta cuenta = cuentas.findByReservaId(reserva.getId()).orElseThrow(ApiException::noEncontrado);
+        boolean habilitado = reserva.getEstado() == EstadoReserva.EN_ESTADIA
+                && checkout.dentroDeVentanaApp(reserva) && !checkout.hayPedidoEnCamino(reserva.getId())
+                && cuentaService.saldo(cuenta.getId()).signum() > 0;
+        var limite = reserva.getFechaSalida().atTime(12, 0).atZone(reloj.getZone()).toInstant();
+        var ultimo = pagos.findFirstByCuentaIdAndMetodoOrderByCreadoEnDescIdDesc(cuenta.getId(), MetodoPago.RECURRENTE);
+        // Un pago ya aplicado no impide iniciar el cobro de cargos posteriores de la estadía.
+        if (habilitado) ultimo = ultimo.filter(p -> p.getEstado() != EstadoPago.APROBADO
+                && p.getEstado() != EstadoPago.REEMBOLSADO);
+        return consulta.consultar(ultimo, habilitado, limite);
     }
 
     /** @return la sesión de pago, o vacío si el saldo ya es 0 (no se crea sesión). */
@@ -79,8 +99,17 @@ public class PagoSaldoAppService {
         var pendiente=pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(),MetodoPago.RECURRENTE,EstadoPago.PENDIENTE);
         if(pendiente.isPresent()){
             var actual=pasarela.obtenerSesion(pendiente.get().getCheckoutId());
-            if(actual.abierta())return Optional.of(new PagoIniciado(actual.url(),actual.expiraEn()==null?null:OffsetDateTime.ofInstant(actual.expiraEn(),reloj.getZone())));
+            if (actual.abierta()) {
+                if (actual.url() == null || actual.url().isBlank()
+                        || (actual.expiraEn() != null && !reloj.instant().isBefore(actual.expiraEn()))) {
+                    throw ApiException.conflicto("PAGO_EN_VERIFICACION",
+                            "El checkout necesita verificarse antes de continuar o iniciar otro pago.");
+                }
+                return Optional.of(new PagoIniciado(actual.url(), actual.expiraEn() == null ? null
+                        : OffsetDateTime.ofInstant(actual.expiraEn(), reloj.getZone())));
+            }
             if(actual.pagada() || "payment_in_progress".equals(actual.estado()))throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Actualiza la cuenta antes de intentarlo de nuevo.");
+            if (!"expired".equals(actual.estado())) throw new ErrorPasarela("No se pudo verificar el vencimiento del checkout.");
             pendiente.get().setEstado(EstadoPago.FALLIDO);
             pagos.saveAndFlush(pendiente.get());
         }

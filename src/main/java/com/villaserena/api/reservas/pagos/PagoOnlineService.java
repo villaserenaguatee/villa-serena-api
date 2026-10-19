@@ -60,10 +60,12 @@ public class PagoOnlineService {
     private final Clock reloj;
     private final Duration plazoPago;
     private final String webUrl;
+    private final ConsultaProcesoPago consulta;
 
     public PagoOnlineService(PasarelaPagos pasarela, ReservaRepository reservas, ReservaService reservaService,
             CuentaRepository cuentas, PagoRepository pagos, JdbcTemplate jdbc, Clock reloj,
-            PropiedadesVillaSerena propiedades) {
+            PropiedadesVillaSerena propiedades, ConsultaProcesoPago consulta) {
+        this.consulta = consulta;
         this.pasarela = pasarela;
         this.reservas = reservas;
         this.reservaService = reservaService;
@@ -102,9 +104,17 @@ public class PagoOnlineService {
         if (pendiente.isPresent()) {
             PasarelaPagos.Sesion sesion = pasarela.obtenerSesion(pendiente.get().getCheckoutId());
             if (sesion.abierta()) {
-                return new PagoIniciado(sesion.url(), vence);
+                if (sesion.url() == null || sesion.url().isBlank()
+                        || (sesion.expiraEn() != null && !reloj.instant().isBefore(sesion.expiraEn()))) {
+                    throw ApiException.conflicto("PAGO_EN_VERIFICACION",
+                            "El checkout necesita verificarse antes de continuar o iniciar otro pago.");
+                }
+                Instant limite = sesion.expiraEn() == null || vencimientoPago(reserva).isBefore(sesion.expiraEn())
+                        ? vencimientoPago(reserva) : sesion.expiraEn();
+                return new PagoIniciado(sesion.url(), OffsetDateTime.ofInstant(limite, reloj.getZone()));
             }
             if(sesion.pagada() || "payment_in_progress".equals(sesion.estado()))throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Consulta el estado antes de repetirlo.");
+            if (!"expired".equals(sesion.estado())) throw new ErrorPasarela("No se pudo verificar el vencimiento del checkout.");
             pendiente.get().setEstado(EstadoPago.FALLIDO);
             pagos.saveAndFlush(pendiente.get());
         }
@@ -130,12 +140,13 @@ public class PagoOnlineService {
     @Transactional(readOnly = true)
     public EstadoReservaPublico estadoPublico(String codigo) {
         Reserva reserva = reservaService.porCodigo(codigo);
-        EstadoPago estadoPago = cuentas.findByReservaId(reserva.getId())
-                .flatMap(c -> pagos.findFirstByCuentaIdAndMetodoOrderByCreadoEnDesc(c.getId(), MetodoPago.RECURRENTE))
-                .map(Pago::getEstado)
-                .orElse(null);
-        return new EstadoReservaPublico(reserva.getCodigo(), reserva.getEstado(), estadoPago,
-                reserva.getEstado() == EstadoReserva.PENDIENTE_PAGO);
+        Optional<Pago> ultimo = cuentas.findByReservaId(reserva.getId())
+                .flatMap(c -> pagos.findFirstByCuentaIdAndMetodoOrderByCreadoEnDescIdDesc(c.getId(), MetodoPago.RECURRENTE));
+        Instant limite = vencimientoPago(reserva);
+        var proceso = consulta.consultar(ultimo, reserva.getEstado() == EstadoReserva.PENDIENTE_PAGO, limite);
+        return new EstadoReservaPublico(reserva.getCodigo(), reserva.getEstado(), proceso.estadoPago(),
+                proceso.puedeReintentar(), proceso.estadoCheckout(), proceso.accionPago(), proceso.urlPago(),
+                proceso.expiraEn(), OffsetDateTime.ofInstant(limite, reloj.getZone()));
     }
 
     /**

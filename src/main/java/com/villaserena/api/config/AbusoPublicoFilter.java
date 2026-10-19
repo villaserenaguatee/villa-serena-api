@@ -47,6 +47,9 @@ public class AbusoPublicoFilter extends OncePerRequestFilter {
             res.getWriter().write("{\"codigo\":\"CONTENIDO_DEMASIADO_GRANDE\",\"mensaje\":\"El contenido supera el tamaño permitido.\"}"); return;
         }
         String ruta = req.getRequestURI(), grupo = null; int maximo = 0; long segundos = 60;
+        if ("GET".equals(req.getMethod()) && ruta.equals("/api/v1/publico/reservas/intento")) {
+            grupo = "consulta-intento-reserva"; maximo = 60;
+        }
         if ("POST".equals(req.getMethod())) {
             if (ruta.equals("/api/v1/app/acceso/recuperacion/solicitar")) { grupo = "recuperacion-envio"; maximo = 6; segundos = 900; }
             else if (ruta.equals("/api/v1/app/acceso/recuperacion/confirmar")) { grupo = "recuperacion-confirmar"; maximo = 20; segundos = 900; }
