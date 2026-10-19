@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -69,7 +70,9 @@ public class ReservaDetalleService {
         return new ReservaDetalle(r.getCodigo(), r.getEstado(), r.getCanal(), r.getIdentificadorExterno(),
                 r.getFechaEntrada(), r.getFechaSalida(), r.noches(), r.getNumeroHuespedes(),
                 new TipoHabitacionReferencia(r.getTipoHabitacionId(), tipo), habitacion, huesped, adicionales,
-                r.getTotal(), saldo, OffsetDateTime.ofInstant(r.getCreadaEn(), reloj.getZone()), historial(r));
+                r.getTotal(), saldo, OffsetDateTime.ofInstant(r.getCreadaEn(), reloj.getZone()), historial(r),
+                r.getHoraEstimadaLlegada() == null ? null
+                        : r.getHoraEstimadaLlegada().format(DateTimeFormatter.ofPattern("HH:mm")));
     }
 
     /** Responsable: nombre del empleado, "Cliente web", el código del canal o "SISTEMA". */

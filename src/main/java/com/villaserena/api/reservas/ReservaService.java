@@ -115,6 +115,7 @@ public class ReservaService {
         reserva.setTipoHabitacionId(tipo.id());
         reserva.setFechaEntrada(solicitud.entrada());
         reserva.setFechaSalida(solicitud.salida());
+        reserva.setHoraEstimadaLlegada(solicitud.horaEstimadaLlegada());
         reserva.setNumeroHuespedes(solicitud.numeroHuespedes());
         reserva.setCanal(solicitud.canal());
         reserva.setIdentificadorExterno(externo ? solicitud.identificadorExterno() : null);

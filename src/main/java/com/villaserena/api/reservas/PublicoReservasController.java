@@ -63,7 +63,7 @@ public class PublicoReservasController {
         return idempotencia.ejecutar("publico", clave, p, ReservaWebCreada.class, () -> {
         verificacion.consumir(p.huesped().correo(),draft,receipt);
         Reserva reserva = reservas.crear(SolicitudReserva.web(p.tipoHabitacionId(), p.entrada(), p.salida(),
-                p.numeroHuespedes(), p.huesped()));
+                p.numeroHuespedes(), p.huesped(), p.horaEstimadaLlegadaLocal()));
         String tipo = disponibilidad.tipo(reserva.getTipoHabitacionId()).map(TipoHabitacionInfo::nombre).orElse("");
         return new ReservaWebCreada(reserva.getCodigo(), reserva.getEstado(),
                 new TipoHabitacionReferencia(reserva.getTipoHabitacionId(), tipo), reserva.getFechaEntrada(),

@@ -3,7 +3,11 @@ package com.villaserena.api.reservas;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -44,6 +48,11 @@ public class Reserva {
 
     @Column(name = "fecha_salida", nullable = false)
     private LocalDate fechaSalida;
+
+    @Column(name = "hora_estimada_llegada")
+    // JDBC 4.2 conserva la hora local sin aplicar hibernate.jdbc.time_zone=UTC.
+    @JdbcTypeCode(SqlTypes.LOCAL_TIME)
+    private LocalTime horaEstimadaLlegada;
 
     @Column(name = "numero_huespedes", nullable = false)
     private int numeroHuespedes;

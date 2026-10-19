@@ -71,7 +71,7 @@ public class CatalogoOfertas {
         disponibilidad.bloquearTipo(id);
         List<Long> elegibles=libres(o,p.entrada(),p.salida(),true);
         if(!Boolean.TRUE.equals(o.get("bookable")) || elegibles.isEmpty() || disponibilidad.cupo(id,p.entrada(),p.salida())<=0)throw ApiException.conflicto("SIN_DISPONIBILIDAD","No hay una habitación acreditada disponible para esta oferta.");
-        SolicitudReserva sol=new SolicitudReserva(id,p.entrada(),p.salida(),p.numeroHuespedes(),null,p.huesped(),elegibles.getFirst(),CanalReserva.DIRECTO_WEB,null,null,com.villaserena.api.comun.Responsable.CLIENTE);
+        SolicitudReserva sol=new SolicitudReserva(id,p.entrada(),p.salida(),p.numeroHuespedes(),null,p.huesped(),elegibles.getFirst(),CanalReserva.DIRECTO_WEB,null,null,com.villaserena.api.comun.Responsable.CLIENTE,p.horaEstimadaLlegadaLocal());
         Reserva reserva=reservas.crearOferta(sol,cotizar(o,p.entrada(),p.salida()),(String)o.get("name"));
         jdbc.update("INSERT INTO reserva_ofertas(reserva_id,slug,contenido) VALUES (?,?,?::jsonb)",reserva.getId(),slug,json.writeValueAsString(o));
         return reserva;
