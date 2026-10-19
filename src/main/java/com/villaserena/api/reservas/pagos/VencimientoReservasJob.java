@@ -1,4 +1,4 @@
-package com.villaserena.api.reservas.stripe;
+package com.villaserena.api.reservas.pagos;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -17,7 +17,7 @@ import com.villaserena.api.reservas.ReservaRepository;
 /**
  * Cada minuto cancela las reservas web que siguen PENDIENTE_PAGO después del plazo
  * (30 minutos; RN-RES-012). Cada reserva se procesa en su propia transacción: si
- * Stripe falla con una, se reintenta en la siguiente vuelta sin afectar a las demás.
+ * Recurrente falla con una, se reintenta en la siguiente vuelta sin afectar a las demás.
  */
 @Component
 public class VencimientoReservasJob {
@@ -25,11 +25,11 @@ public class VencimientoReservasJob {
     private static final Logger log = LoggerFactory.getLogger(VencimientoReservasJob.class);
 
     private final ReservaRepository reservas;
-    private final PagoStripeService pagos;
+    private final PagoOnlineService pagos;
     private final Clock reloj;
     private final Duration plazo;
 
-    public VencimientoReservasJob(ReservaRepository reservas, PagoStripeService pagos, Clock reloj,
+    public VencimientoReservasJob(ReservaRepository reservas, PagoOnlineService pagos, Clock reloj,
             PropiedadesVillaSerena propiedades) {
         this.reservas = reservas;
         this.pagos = pagos;

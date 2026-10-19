@@ -123,7 +123,7 @@ public class CheckoutService {
      * Confirma el check-out:
      * <ol>
      * <li>Recepción: si hay saldo, UN solo pago por el total (EFECTIVO, TARJETA u OTRO).
-     * App: el saldo ya debe ser 0 (pagado con Stripe).</li>
+     * App: el saldo ya debe ser 0 (pagado con Recurrente).</li>
      * <li>Factura (Hugo), reserva FINALIZADA y cuenta CERRADA.</li>
      * <li>Habitación LIBRE + SUCIA, o FUERA_DE_SERVICIO si tiene una incidencia que
      * impide su uso.</li>

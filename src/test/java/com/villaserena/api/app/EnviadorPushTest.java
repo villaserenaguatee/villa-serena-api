@@ -27,7 +27,7 @@ import com.villaserena.api.notificaciones.TipoNotificacion;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de OBJ-3A-2 parte C: la push solo sale durante la estadía (RN-NOT-001) y,
@@ -62,7 +62,7 @@ class EnviadorPushTest {
     OutboxDespachador despachador;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     long recepcionista;
     long huespedId;

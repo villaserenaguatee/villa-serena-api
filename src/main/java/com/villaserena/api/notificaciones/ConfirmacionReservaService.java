@@ -24,7 +24,7 @@ import com.villaserena.api.config.PropiedadesVillaSerena;
  * <p>
  * {@code ReservaService} llama a esta clase a través de
  * {@link ConfirmacionReservaNotifier} en los tres momentos en que una reserva
- * queda confirmada: el webhook de Stripe (web), Recepción y el canal.
+ * queda confirmada: el webhook de Recurrente (web), Recepción y el canal.
  */
 @Service
 public class ConfirmacionReservaService implements ConfirmacionReservaNotifier {

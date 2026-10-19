@@ -43,3 +43,17 @@ done
 docker exec -i $C psql -U villaserena -d $DB < scripts/probar-esquema.sql
 docker exec $C psql -U villaserena -d postgres -c "DROP DATABASE $DB WITH (FORCE)"
 ```
+
+## Pagos con Recurrente (issue #54, ADR-017)
+
+El API crea checkouts alojados en GTQ con tarjetas, por el total de la reserva o el saldo de la estadía. Configura `RECURRENTE_PUBLIC_KEY`, `RECURRENTE_SECRET_KEY` y `RECURRENTE_WEBHOOK_SECRET` en tu entorno local, según `.env.example`. La clave pública queda disponible para integraciones que la necesiten; el checkout del backend solo requiere la secreta. Para pruebas usa una cuenta Sandbox, sin dinero real.
+
+Registra `POST /api/v1/pagos/recurrente/webhook` en el dashboard de Recurrente con una URL accesible por el proveedor. La verificación requiere el cuerpo original y los tres encabezados Svix: `svix-id`, `svix-timestamp`, `svix-signature`. El timestamp admite cinco minutos de diferencia. El mensaje se deduplica por `svix-id` y el pago se confirma consultando el checkout y conciliando su monto y moneda GTQ; la redirección al navegador no confirma el cobro.
+
+La [guía oficial de webhooks](https://docs.recurrente.com/guias-espanol/comenzar/webhooks) documenta `intent.succeeded` para cuentas nuevas y Sandbox. Los nombres `checkout.succeeded` / `payment.succeeded` del ADR no corresponden a ese formato. El endpoint también admite un aviso `checkout.expired` únicamente si la consulta confirma `expired`; el catálogo actual no garantiza su emisión. El job local consulta y vence los checkouts cada minuto después del plazo de 30 minutos, sin depender de un aviso de vencimiento. Un pago `payment_in_progress` mantiene la reserva pendiente hasta poder reconciliarlo.
+
+Los reembolsos usan `intent_id` y una llave idempotente estable; solo `status: succeeded` permite cancelar con reembolso. Una respuesta pendiente requiere consultar/reintentar la operación, sin marcarla como reembolsada.
+
+Flyway V27 renombra las columnas de pasarela y la tabla de eventos, agrega `RECURRENTE` y conserva los pagos y responsables históricos `STRIPE`. No convierte cobros históricos en cobros de Recurrente ni los envía a su API. Si su cancelación requiere reembolso, responde `PAGO_LEGADO_REQUIERE_CONCILIACION` y conserva la reserva hasta conciliar con el proveedor original. Antes de migrar una instalación con checkouts Stripe aún pendientes, deben conciliarse con el proveedor anterior. Web y app deben actualizar sus copias de OpenAPI y aceptar `RECURRENTE` en los métodos de pago.
+
+Validación automática: `./mvnw test` usa PostgreSQL 17 mediante Testcontainers; `PasarelaRecurrenteClientTest` valida el contrato HTTP y firmas con datos ficticios. La prueba completa en Sandbox requiere claves configuradas y un endpoint registrado en Recurrente.

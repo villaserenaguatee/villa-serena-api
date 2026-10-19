@@ -36,7 +36,7 @@ import com.villaserena.api.estadia.CheckinService;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 import com.villaserena.api.roomservice.PedidoService;
 import com.villaserena.api.roomservice.EstadoPedido;
 import com.villaserena.api.roomservice.dto.LineaPedidoPeticion;
@@ -89,7 +89,7 @@ class WebSocketIntegrationTest {
     EventosTiempoReal eventosTiempoReal;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     WebSocketStompClient cliente;
     String codigo;

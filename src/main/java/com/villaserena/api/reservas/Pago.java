@@ -14,7 +14,7 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Pago de una cuenta (tabla {@code pagos}). Los de Stripe guardan su sesión y su payment intent. */
+/** Pago de una cuenta (tabla {@code pagos}). Los pagos en línea guardan el checkout y el identificador del cobro. */
 @Entity
 @Table(name = "pagos")
 @Getter
@@ -41,11 +41,11 @@ public class Pago {
 
     private String referencia;
 
-    @Column(name = "stripe_session_id")
-    private String stripeSessionId;
+    @Column(name = "checkout_id")
+    private String checkoutId;
 
-    @Column(name = "stripe_payment_intent_id")
-    private String stripePaymentIntentId;
+    @Column(name = "pago_externo_id")
+    private String pagoExternoId;
 
     @Column(name = "registrado_por_empleado_id")
     private Long registradoPorEmpleadoId;

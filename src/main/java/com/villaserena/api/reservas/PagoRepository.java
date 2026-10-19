@@ -14,8 +14,8 @@ public interface PagoRepository extends JpaRepository<Pago, Long> {
     List<Pago> findByCuentaIdOrderByCreadoEn(Long cuentaId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select p from Pago p where p.stripeSessionId = :sesionId")
-    Optional<Pago> bloquearPorSesionStripe(String sesionId);
+    @Query("select p from Pago p where p.checkoutId = :sesionId")
+    Optional<Pago> bloquearPorCheckout(String sesionId);
 
     Optional<Pago> findFirstByCuentaIdAndMetodoAndEstado(Long cuentaId, MetodoPago metodo, EstadoPago estado);
 

@@ -14,7 +14,7 @@ public record PropiedadesVillaSerena(
         PrimerAdmin primerAdmin,
         String webUrl,
         Reservas reservas,
-        Stripe stripe,
+        Recurrente recurrente,
         Archivos archivos,
         Notificaciones notificaciones) {
 
@@ -34,8 +34,8 @@ public record PropiedadesVillaSerena(
     public record Reservas(int minutosPago) {
     }
 
-    /** {@code urlRetornoApp}: a dónde vuelve Stripe después de pagar el saldo en la app. */
-    public record Stripe(String claveSecreta, String webhookSecreto, String urlRetornoApp) {
+    /** {@code urlRetornoApp}: a dónde vuelve Recurrente después de pagar el saldo en la app. */
+    public record Recurrente(String clavePublica, String claveSecreta, String webhookSecreto, String urlRetornoApp) {
     }
 
     /**

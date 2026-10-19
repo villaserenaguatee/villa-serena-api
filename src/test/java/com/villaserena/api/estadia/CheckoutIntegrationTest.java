@@ -39,7 +39,7 @@ import com.villaserena.api.facturacion.EmisorFactura;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /** Pruebas de OBJ-4A: cuenta, cargos, check-out de Recepción y de la app, y pago del saldo. */
 @SpringBootTest
@@ -74,7 +74,7 @@ class CheckoutIntegrationTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @MockitoBean
     EmisorFactura emisorFactura;
@@ -235,21 +235,21 @@ class CheckoutIntegrationTest {
                 .andExpect(jsonPath("$.codigo").value("FUERA_DE_HORARIO"));
 
         reloj.fijar(SALIDA_10AM);
-        when(stripe.crearSesion(anyString(), any(), anyString(), any(), any()))
-                .thenReturn(new PasarelaStripe.Sesion("cs_saldo", "https://checkout.stripe.com/c/pay/cs_saldo",
-                        "open", false, null, SALIDA_10AM.plusSeconds(1860)));
+        when(pasarela.crearSesion(anyString(), any(), anyString(), any(), any()))
+                .thenReturn(new PasarelaPagos.Sesion("cs_saldo", "https://app.recurrente.com/checkout-session/cs_saldo",
+                        "unpaid", false, null, SALIDA_10AM.plusSeconds(1860)));
         mvc.perform(post("/api/v1/app/reservas/{c}/pago-saldo", codigo).header("Authorization", huesped))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urlPago").value("https://checkout.stripe.com/c/pay/cs_saldo"));
+                .andExpect(jsonPath("$.urlPago").value("https://app.recurrente.com/checkout-session/cs_saldo"));
 
         // Con saldo pendiente no se confirma.
         checkoutApp(huesped).andExpect(status().isConflict()).andExpect(jsonPath("$.codigo").value("SALDO_PENDIENTE"));
 
         // Llega el webhook: el saldo queda en 0 y el check-out se confirma.
-        when(stripe.verificarEvento(anyString(), anyString())).thenReturn(new PasarelaStripe.Evento("evt_saldo",
-                "checkout.session.completed",
-                new PasarelaStripe.Sesion("cs_saldo", null, "complete", true, "pi_saldo", null)));
-        mvc.perform(post("/api/v1/pagos/stripe/webhook").header("Stripe-Signature", "x")
+        when(pasarela.verificarEvento(anyString(), any())).thenReturn(new PasarelaPagos.Evento("evt_saldo",
+                "intent.succeeded",
+                new PasarelaPagos.Sesion("cs_saldo", null, "paid", true, "pi_saldo", null)));
+        mvc.perform(post("/api/v1/pagos/recurrente/webhook").header("svix-id", "msg_saldo")
                         .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk());
         mvc.perform(post("/api/v1/app/reservas/{c}/pago-saldo", codigo).header("Authorization", huesped))

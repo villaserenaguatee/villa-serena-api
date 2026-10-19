@@ -18,7 +18,7 @@ import com.villaserena.api.reservas.BusquedaReservasService;
 import com.villaserena.api.reservas.BusquedaReservasService.FiltroRapido;
 import com.villaserena.api.reservas.BusquedaReservasService.Filtros;
 import com.villaserena.api.reservas.dto.CalendarioReservas;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Con el perfil "demo", al arrancar con la base vacía se crean las reservas de prueba
@@ -41,7 +41,7 @@ class ReservasDePruebaTest {
     BusquedaReservasService busqueda;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @Test
     void creaDoceReservasDeLosCuatroCanalesYVariosEstados() {

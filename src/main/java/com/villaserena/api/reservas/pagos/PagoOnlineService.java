@@ -1,4 +1,4 @@
-package com.villaserena.api.reservas.stripe;
+package com.villaserena.api.reservas.pagos;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -30,7 +30,7 @@ import com.villaserena.api.reservas.dto.EstadoReservaPublico;
 import com.villaserena.api.reservas.dto.PagoIniciado;
 
 /**
- * Pago en línea con Stripe Checkout (HU-HUE-06; documento 14, AD-17).
+ * Pago en línea con Recurrente Checkout (HU-HUE-06; ADR-017).
  * <ul>
  * <li>Una sola sesión por reserva, por el 100 % del total (RN-PAG-003, RN-PAG-006).</li>
  * <li>El pago se confirma solo por el webhook, con firma e idempotencia (RN-PAG-001, 002).</li>
@@ -39,22 +39,19 @@ import com.villaserena.api.reservas.dto.PagoIniciado;
  * </ul>
  */
 @Service
-public class PagoStripeService {
+public class PagoOnlineService {
 
     public static final String META_CODIGO = "codigoReserva";
     public static final String META_TIPO = "tipoPago";
     public static final String TIPO_RESERVA = "RESERVA";
     public static final String TIPO_SALDO = "SALDO";
 
-    static final String EVENTO_PAGADA = "checkout.session.completed";
-    static final String EVENTO_VENCIDA = "checkout.session.expired";
+    static final String EVENTO_PAGADA = "intent.succeeded";
+    static final String EVENTO_VENCIDA = "checkout.expired";
 
-    /** Stripe exige que una sesión dure al menos 30 minutos. */
-    private static final Duration DURACION_MINIMA_SESION = Duration.ofMinutes(31);
+    private static final Logger log = LoggerFactory.getLogger(PagoOnlineService.class);
 
-    private static final Logger log = LoggerFactory.getLogger(PagoStripeService.class);
-
-    private final PasarelaStripe stripe;
+    private final PasarelaPagos pasarela;
     private final ReservaRepository reservas;
     private final ReservaService reservaService;
     private final CuentaRepository cuentas;
@@ -64,10 +61,10 @@ public class PagoStripeService {
     private final Duration plazoPago;
     private final String webUrl;
 
-    public PagoStripeService(PasarelaStripe stripe, ReservaRepository reservas, ReservaService reservaService,
+    public PagoOnlineService(PasarelaPagos pasarela, ReservaRepository reservas, ReservaService reservaService,
             CuentaRepository cuentas, PagoRepository pagos, JdbcTemplate jdbc, Clock reloj,
             PropiedadesVillaSerena propiedades) {
-        this.stripe = stripe;
+        this.pasarela = pasarela;
         this.reservas = reservas;
         this.reservaService = reservaService;
         this.cuentas = cuentas;
@@ -94,33 +91,36 @@ public class PagoStripeService {
         if (!"PENDIENTE_PAGO".equals(estadoActual)) {
             throw ApiException.conflicto("RESERVA_NO_PENDIENTE", "La reserva ya no está pendiente de pago.");
         }
+        if (!reloj.instant().isBefore(vencimientoPago(reserva))) {
+            throw ApiException.conflicto("PLAZO_PAGO_VENCIDO", "El plazo para pagar la reserva ya venció.");
+        }
         Cuenta cuenta = cuentas.findByReservaId(reserva.getId()).orElseThrow(ApiException::noEncontrado);
         OffsetDateTime vence = OffsetDateTime.ofInstant(vencimientoPago(reserva), reloj.getZone());
 
-        Optional<Pago> pendiente = pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(), MetodoPago.STRIPE,
+        Optional<Pago> pendiente = pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(), MetodoPago.RECURRENTE,
                 EstadoPago.PENDIENTE);
         if (pendiente.isPresent()) {
-            PasarelaStripe.Sesion sesion = stripe.obtenerSesion(pendiente.get().getStripeSessionId());
+            PasarelaPagos.Sesion sesion = pasarela.obtenerSesion(pendiente.get().getCheckoutId());
             if (sesion.abierta()) {
                 return new PagoIniciado(sesion.url(), vence);
             }
-            if(sesion.pagada())throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Consulta el estado antes de repetirlo.");
+            if(sesion.pagada() || "payment_in_progress".equals(sesion.estado()))throw ApiException.conflicto("PAGO_EN_VERIFICACION","El pago se está verificando. Consulta el estado antes de repetirlo.");
             pendiente.get().setEstado(EstadoPago.FALLIDO);
             pagos.saveAndFlush(pendiente.get());
         }
 
-        PasarelaStripe.Sesion sesion = stripe.crearSesion(
+        PasarelaPagos.Sesion sesion = pasarela.crearSesion(
                 "Reserva " + reserva.getCodigo() + " — Hotel Villa Serena",
                 reserva.getTotal(),
                 webUrl + "/reserva/resultado?codigo=" + reserva.getCodigo(),
-                reloj.instant().plus(DURACION_MINIMA_SESION),
+                vencimientoPago(reserva),
                 Map.of(META_CODIGO, reserva.getCodigo(), META_TIPO, TIPO_RESERVA));
         Pago pago = new Pago();
         pago.setCuentaId(cuenta.getId());
-        pago.setMetodo(MetodoPago.STRIPE);
+        pago.setMetodo(MetodoPago.RECURRENTE);
         pago.setEstado(EstadoPago.PENDIENTE);
         pago.setMonto(reserva.getTotal());
-        pago.setStripeSessionId(sesion.id());
+        pago.setCheckoutId(sesion.id());
         pago.setCreadoEn(reloj.instant());
         pagos.save(pago);
         return new PagoIniciado(sesion.url(), vence);
@@ -131,7 +131,7 @@ public class PagoStripeService {
     public EstadoReservaPublico estadoPublico(String codigo) {
         Reserva reserva = reservaService.porCodigo(codigo);
         EstadoPago estadoPago = cuentas.findByReservaId(reserva.getId())
-                .flatMap(c -> pagos.findFirstByCuentaIdAndMetodoOrderByCreadoEnDesc(c.getId(), MetodoPago.STRIPE))
+                .flatMap(c -> pagos.findFirstByCuentaIdAndMetodoOrderByCreadoEnDesc(c.getId(), MetodoPago.RECURRENTE))
                 .map(Pago::getEstado)
                 .orElse(null);
         return new EstadoReservaPublico(reserva.getCodigo(), reserva.getEstado(), estadoPago,
@@ -139,13 +139,13 @@ public class PagoStripeService {
     }
 
     /**
-     * Procesa un aviso de Stripe ya verificado. Es idempotente: el id del evento se
-     * guarda en {@code stripe_eventos} en la misma transacción; si ya estaba, no se
+     * Procesa un aviso de Recurrente ya verificado. Es idempotente: el id del evento se
+     * guarda en {@code pago_eventos} en la misma transacción; si ya estaba, no se
      * hace nada. Solo interesan la sesión pagada y la vencida.
      */
     @Transactional
-    public void procesarEvento(PasarelaStripe.Evento evento) {
-        int nuevo = jdbc.update("INSERT INTO stripe_eventos (evento_id, tipo) VALUES (?, ?) ON CONFLICT DO NOTHING",
+    public void procesarEvento(PasarelaPagos.Evento evento) {
+        int nuevo = jdbc.update("INSERT INTO pago_eventos (evento_id, tipo) VALUES (?, ?) ON CONFLICT DO NOTHING",
                 evento.id(), evento.tipo());
         if (nuevo == 0 || evento.sesion() == null) {
             return;
@@ -153,7 +153,7 @@ public class PagoStripeService {
         switch (evento.tipo()) {
             case EVENTO_PAGADA -> {
                 if (evento.sesion().pagada()) {
-                    aprobar(evento.sesion(), Responsable.STRIPE);
+                    aprobar(evento.sesion(), Responsable.RECURRENTE);
                 }
             }
             case EVENTO_VENCIDA -> marcarFallido(evento.sesion().id());
@@ -165,7 +165,7 @@ public class PagoStripeService {
 
     /**
      * Cancela una reserva web cuyo plazo de pago venció (UC-15, RN-RES-012). Antes
-     * consulta Stripe: si la sesión ya estaba pagada, la confirma en lugar de
+     * consulta Recurrente: si la sesión ya estaba pagada, la confirma en lugar de
      * cancelarla. Si no, vence la sesión para que ya no se pueda pagar.
      */
     @Transactional
@@ -175,10 +175,10 @@ public class PagoStripeService {
             return;
         }
         Cuenta cuenta = cuentas.findByReservaId(reserva.getId()).orElseThrow();
-        Optional<Pago> pendiente = pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(), MetodoPago.STRIPE,
+        Optional<Pago> pendiente = pagos.findFirstByCuentaIdAndMetodoAndEstado(cuenta.getId(), MetodoPago.RECURRENTE,
                 EstadoPago.PENDIENTE);
         if (pendiente.isPresent()) {
-            PasarelaStripe.Sesion sesion = stripe.expirarSesion(pendiente.get().getStripeSessionId());
+            PasarelaPagos.Sesion sesion = pasarela.expirarSesion(pendiente.get().getCheckoutId());
             if (sesion.pagada()) {
                 aprobar(sesion, Responsable.SISTEMA);
                 return;
@@ -188,19 +188,24 @@ public class PagoStripeService {
         reservaService.cancelar(reserva, Responsable.SISTEMA, "Pago no completado en el plazo de 30 minutos");
     }
 
-    private void aprobar(PasarelaStripe.Sesion sesion, Responsable responsable) {
-        Optional<Pago> encontrado = pagos.bloquearPorSesionStripe(sesion.id());
+    private void aprobar(PasarelaPagos.Sesion sesion, Responsable responsable) {
+        Optional<Pago> encontrado = pagos.bloquearPorCheckout(sesion.id());
         if (encontrado.isEmpty()) {
-            log.warn("Sesión de Stripe {} sin pago registrado; se ignora", sesion.id());
+            log.warn("Sesión de Recurrente {} sin pago registrado; se ignora", sesion.id());
             return;
         }
         Pago pago = encontrado.get();
         if (pago.getEstado() == EstadoPago.APROBADO) {
             return;
         }
+        if (pago.getMetodo() != MetodoPago.RECURRENTE
+                || (sesion.monto() != null && sesion.monto().compareTo(pago.getMonto()) != 0)
+                || (sesion.moneda() != null && !"GTQ".equals(sesion.moneda()))) {
+            throw ApiException.conflicto("PAGO_NO_COINCIDE", "El pago no coincide con el monto y moneda registrados.");
+        }
         pago.setEstado(EstadoPago.APROBADO);
         pago.setAprobadoEn(reloj.instant());
-        pago.setStripePaymentIntentId(sesion.paymentIntentId());
+        pago.setPagoExternoId(sesion.pagoExternoId());
         pagos.saveAndFlush(pago);
 
         Cuenta cuenta = cuentas.findById(pago.getCuentaId()).orElseThrow();
@@ -208,12 +213,12 @@ public class PagoStripeService {
         if (reserva.getEstado() == EstadoReserva.PENDIENTE_PAGO) {
             reservaService.confirmarPagoWeb(reserva, responsable);
         } else if (reserva.getEstado() == EstadoReserva.CANCELADA) {
-            log.warn("La reserva {} ya estaba cancelada cuando Stripe aprobó el pago", reserva.getCodigo());
+            log.warn("La reserva {} ya estaba cancelada cuando Recurrente aprobó el pago", reserva.getCodigo());
         }
     }
 
     private void marcarFallido(String sesionId) {
-        pagos.bloquearPorSesionStripe(sesionId)
+        pagos.bloquearPorCheckout(sesionId)
                 .filter(p -> p.getEstado() == EstadoPago.PENDIENTE)
                 .ifPresent(p -> {
                     p.setEstado(EstadoPago.FALLIDO);

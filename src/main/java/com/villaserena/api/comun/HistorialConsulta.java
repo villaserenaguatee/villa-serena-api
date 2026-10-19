@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 /**
  * Lee el historial de una entidad para mostrarlo (RG-EST-02). El responsable se
  * resuelve a un nombre legible: el del empleado si actuó una persona, o el actor
- * (Huésped, Cliente web, Stripe, SISTEMA) si no.
+ * (Huésped, Cliente web, Recurrente, Stripe histórico, SISTEMA) si no.
  */
 @Service
 public class HistorialConsulta {
@@ -46,6 +46,7 @@ public class HistorialConsulta {
             case HUESPED -> "Huésped";
             case CLIENTE -> "Cliente web";
             case CANAL -> "Canal";
+            case RECURRENTE -> "Recurrente";
             case STRIPE -> "Stripe";
             case EMPLEADO, SISTEMA -> "SISTEMA";
         };

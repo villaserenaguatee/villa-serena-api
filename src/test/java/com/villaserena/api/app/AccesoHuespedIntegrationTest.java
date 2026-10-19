@@ -33,7 +33,7 @@ import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de OBJ-3A-2 parte A y B (HU-HUE-08, HU-HUE-09): código de acceso con
@@ -59,7 +59,7 @@ class AccesoHuespedIntegrationTest {
     RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     /** AbusoPublicoFilter cuenta las peticiones por IP en memoria: cada prueba llega como otro cliente. */
     private static final AtomicInteger CLIENTES = new AtomicInteger();

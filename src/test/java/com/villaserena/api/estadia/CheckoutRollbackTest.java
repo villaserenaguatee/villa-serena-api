@@ -27,7 +27,7 @@ import com.villaserena.api.reservas.MetodoPago;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * RN-RES-022: si la factura falla, el check-out no cambia nada. Esta prueba no corre
@@ -54,7 +54,7 @@ class CheckoutRollbackTest {
     EmisorFactura emisorFactura;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     Long reservaId;
     Long huespedId;
