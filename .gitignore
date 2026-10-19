@@ -20,7 +20,7 @@ hs_err_pid*
 *.iml
 *.ipr
 *.iws
-out/
+/out/
 .metadata
 .classpath
 .project
