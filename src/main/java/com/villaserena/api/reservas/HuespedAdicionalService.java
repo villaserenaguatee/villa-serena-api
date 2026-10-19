@@ -45,9 +45,9 @@ public class HuespedAdicionalService {
                     (reserva_id, nombre_completo, tipo_documento, numero_documento, nacionalidad)
                 VALUES (?, ?, ?, ?, ?) RETURNING id""", Long.class,
                 reserva.id(), p.nombreCompleto().trim(), p.tipoDocumento().name(), p.numeroDocumento().trim(),
-                p.nacionalidad().trim());
+                p.nacionalidad());
         return new HuespedAdicionalVista(id, p.nombreCompleto().trim(), p.tipoDocumento(),
-                p.numeroDocumento().trim(), p.nacionalidad().trim());
+                p.numeroDocumento().trim(), p.nacionalidad());
     }
 
     private record DatosReserva(long id, EstadoReserva estado, int numeroHuespedes) {

@@ -493,7 +493,6 @@ paths:
                 nombreCompleto: María José López
                 correo: maria.lopez@example.com
                 telefono: '+502 5555 1234'
-                nacionalidad: Guatemalteca
                 tipoDocumento: DPI
                 numeroDocumento: '2547896320101'
       responses:
@@ -781,7 +780,7 @@ paths:
       operationId: registrarHuesped
       summary: Registrar un huésped
       description: |
-        HU-REC-01 · RF-HUE-001. Rol `RECEPCION`. Los 6 datos son obligatorios. El
+        HU-REC-01 · RF-HUE-001. Rol `RECEPCION`. La nacionalidad es opcional. El
         correo identifica al huésped: si ya existe, responde 200 con el perfil
         existente y `yaExistia: true` (no crea otro ni cambia sus datos).
       requestBody:
@@ -794,7 +793,6 @@ paths:
               nombreCompleto: María José López
               correo: maria.lopez@example.com
               telefono: '+502 5555 1234'
-              nacionalidad: Guatemalteca
               tipoDocumento: DPI
               numeroDocumento: '2547896320101'
       responses:
@@ -8469,8 +8467,8 @@ components:
     # ------------------------------------------------------------------
     HuespedDatos:
       type: object
-      description: Los 6 datos obligatorios del huésped principal (web, Recepción y canal).
-      required: [nombreCompleto, correo, telefono, nacionalidad, tipoDocumento, numeroDocumento]
+      description: Datos del huésped principal (web, Recepción y canal). La nacionalidad es opcional.
+      required: [nombreCompleto, correo, telefono, tipoDocumento, numeroDocumento]
       properties:
         nombreCompleto:
           type: string
@@ -8488,8 +8486,8 @@ components:
           maxLength: 30
           examples: ['+502 5555 1234']
         nacionalidad:
-          type: string
-          minLength: 1
+          type: [string, "null"]
+          description: Opcional. Si se omite o se envía en blanco se guarda como null, sin inferir valores.
           maxLength: 60
           examples: [Guatemalteca]
         tipoDocumento:
@@ -8520,7 +8518,7 @@ components:
           examples: [María José López]
     HuespedAdicionalDatos:
       type: object
-      required: [nombreCompleto, tipoDocumento, numeroDocumento, nacionalidad]
+      required: [nombreCompleto, tipoDocumento, numeroDocumento]
       properties:
         nombreCompleto:
           type: string
@@ -8535,8 +8533,8 @@ components:
           maxLength: 30
           examples: [P1234567]
         nacionalidad:
-          type: string
-          minLength: 1
+          type: [string, "null"]
+          description: Opcional. Si se omite o se envía en blanco se guarda como null, sin inferir valores.
           maxLength: 60
           examples: [Mexicana]
     HuespedAdicional:
@@ -12820,7 +12818,7 @@ x-permisos:
       - RECEPCION
     nivel: 1
     condiciones: |
-      HU-REC-01 · RF-HUE-001. Rol `RECEPCION`. Los 6 datos son obligatorios. El
+      HU-REC-01 · RF-HUE-001. Rol `RECEPCION`. La nacionalidad es opcional. El
       correo identifica al huésped: si ya existe, responde 200 con el perfil
       existente y `yaExistia: true` (no crea otro ni cambia sus datos).
     historias:

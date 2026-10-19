@@ -33,7 +33,7 @@ public class HuespedService {
             nuevo.setNombreCompleto(datos.nombreCompleto().trim());
             nuevo.setCorreo(datos.correo().trim());
             nuevo.setTelefono(datos.telefono().trim());
-            nuevo.setNacionalidad(datos.nacionalidad().trim());
+            nuevo.setNacionalidad(datos.nacionalidad());
             nuevo.setTipoDocumento(datos.tipoDocumento());
             nuevo.setNumeroDocumento(datos.numeroDocumento().trim());
             nuevo.setPaisEmisorPasaporte(datos.paisEmisorPasaporte());
@@ -55,7 +55,7 @@ public class HuespedService {
                 ON CONFLICT ((lower(correo))) DO NOTHING
                 RETURNING id""", Long.class,
                 datos.nombreCompleto().trim(), datos.correo().trim(), datos.telefono().trim(),
-                datos.nacionalidad().trim(), datos.tipoDocumento().name(), datos.numeroDocumento().trim(), datos.paisEmisorPasaporte());
+                datos.nacionalidad(), datos.tipoDocumento().name(), datos.numeroDocumento().trim(), datos.paisEmisorPasaporte());
         Huesped huesped = nuevo.isEmpty()
                 ? huespedes.findByCorreoIgnoreCase(datos.correo().trim()).orElseThrow()
                 : huespedes.findById(nuevo.getFirst()).orElseThrow();

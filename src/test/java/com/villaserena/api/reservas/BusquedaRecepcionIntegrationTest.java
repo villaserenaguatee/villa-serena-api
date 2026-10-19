@@ -17,6 +17,8 @@ import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -103,13 +105,57 @@ class BusquedaRecepcionIntegrationTest {
     }
 
     @Test
-    void registrarExigeLosSeisDatos() throws Exception {
+    void registrarExigeLosDatosObligatorios() throws Exception {
         mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nombreCompleto\": \"Sin correo\", \"telefono\": \"1\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("DATOS_INVALIDOS"))
                 .andExpect(jsonPath("$.detalles[*].campo", hasItem("correo")));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", ", \"nacionalidad\": null", ", \"nacionalidad\": \"   \""})
+    void registraYReservaSinNacionalidad(String campo) throws Exception {
+        String json = """
+                {"nombreCompleto": "Sin Nacionalidad", "correo": "sin-nacionalidad@correo.test",
+                 "telefono": "+502 5555 0000", "tipoDocumento": "DPI", "numeroDocumento": "1234567890101"%s}
+                """.formatted(campo);
+        String respuesta = mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.huesped.nacionalidad").isEmpty())
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(respuesta, "$.huesped.id")).longValue();
+        assertThat(jdbc.queryForObject("SELECT nacionalidad FROM huespedes WHERE id = ?", String.class, id))
+                .isNull();
+        String codigo = crearReserva(id, "Doble Superior", "2026-10-15", "2026-10-17", 2, null);
+        mvc.perform(post("/api/v1/reservas/{c}/huespedes-adicionales", codigo).header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"nombreCompleto": "Acompañante", "tipoDocumento": "DPI",
+                                 "numeroDocumento": "9876543210101"%s}
+                                """.formatted(campo)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nacionalidad").isEmpty());
+        assertThat(jdbc.queryForObject("SELECT nacionalidad FROM huespedes_adicionales WHERE nombre_completo = 'Acompañante'",
+                String.class)).isNull();
+        detalle(codigo).andExpect(status().isOk())
+                .andExpect(jsonPath("$.huesped.nacionalidad").isEmpty())
+                .andExpect(jsonPath("$.huespedesAdicionales[0].nacionalidad").isEmpty());
+    }
+
+    @Test
+    void omitirNacionalidadNoModificaElPerfilExistente() throws Exception {
+        long id = registrarId("Perfil Histórico", "historico@correo.test", "1234567890101");
+        String json = huespedJson("Otro Nombre", "historico@correo.test", "9876543210101")
+                .replace("\"nacionalidad\": \"Guatemalteca\", ", "");
+        mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.yaExistia").value(true))
+                .andExpect(jsonPath("$.huesped.id").value(id))
+                .andExpect(jsonPath("$.huesped.nacionalidad").value("Guatemalteca"))
+                .andExpect(jsonPath("$.huesped.nombreCompleto").value("Perfil Histórico"));
     }
 
     @Test

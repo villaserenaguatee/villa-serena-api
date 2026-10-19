@@ -33,7 +33,7 @@ public class Huesped {
     @Column(nullable = false)
     private String telefono;
 
-    @Column(nullable = false)
+    @Column(length = 60)
     private String nacionalidad;
 
     @Enumerated(EnumType.STRING)
