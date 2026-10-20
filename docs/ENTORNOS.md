@@ -183,9 +183,34 @@ Después de cambiar la contraseña inicial, Administración utiliza las cuentas 
 
 Todas requieren un JWT de `ADMIN` con contraseña definitiva. No puedes cambiar tu propio rol ni desactivar tu cuenta. Guarda y entrega la contraseña temporal de forma privada: no se envía por correo ni puede consultarse después. El empleado debe cambiarla al iniciar sesión. Estas operaciones no necesitan integraciones externas ni fixtures.
 
-En la web, `/api/admin/empleados` corresponde al BFF de Next.js, que llama a `/api/v1/admin/empleados` en Spring. Si pruebas directamente el API, incluye `/api/v1`. Para diagnosticar rutas inexistentes, configura `LOGGING_LEVEL_COM_VILLASERENA_API_COMUN=DEBUG` y reinicia el API: el log muestra método y ruta, sin query, cabeceras ni cuerpo.
+En la web, `/api/admin/empleados` corresponde al BFF de Next.js, que llama a `/api/v1/admin/empleados` en Spring. Si pruebas directamente el API, incluye `/api/v1`.
 
 Si prefieres cargar fixtures en una instancia local vacía, deja el bootstrap apagado: el script manual rechaza tablas de negocio que ya contienen registros. Ver [carga local explícita](../README.md#carga-local-explícita). No ejecutes fixtures en producción.
+
+## Logs en local y dev
+
+Ambos perfiles escriben en consola automáticamente: arranque e integraciones en `INFO`, código del API en `DEBUG` y una línea por petición HTTP con método, ruta, estado y duración. Incluye rechazos de seguridad (401/403), validaciones, rutas inexistentes (404) y errores (500). Los errores de negocio muestran su código en DEBUG; las excepciones inesperadas conservan su stack trace.
+
+```text
+HTTP GET /api/v1/admin/empleados -> 200 (12 ms)
+HTTP GET /api/v1/ruta-inexistente -> 404 (3 ms)
+```
+
+Las trazas HTTP no incluyen query, cabeceras ni cuerpos. Se mantiene `INFO` para bibliotecas de Spring y terceros: DEBUG/TRACE global puede imprimir DTO con credenciales, tokens o detalles de integraciones. Estos valores por defecto no requieren variables nuevas; una configuración explícita `LOGGING_LEVEL_*` en tu entorno puede sobrescribirlos.
+
+Después de incorporar cambios de código o configuración, reconstruye y recrea únicamente el API del entorno que estés usando (con sus dependencias ya levantadas):
+
+```bash
+# local
+docker compose --env-file .env.local -f compose.local.yml up -d --build --no-deps api
+docker compose --env-file .env.local -f compose.local.yml logs -f --tail=100 api
+
+# dev (alternativa a local)
+docker compose --env-file .env.dev -f compose.dev.yml up -d --build --no-deps api
+docker compose --env-file .env.dev -f compose.dev.yml logs -f --tail=100 api
+```
+
+También funciona `docker logs -f --tail=100 NOMBRE_DEL_CONTENEDOR_API` (consulta el nombre con `docker ps`). Un `docker restart` reutiliza la imagen anterior; para incorporar estos cambios necesitas la reconstrucción. Con `./mvnw spring-boot:run -Dspring-boot.run.profiles=local` o `dev`, los mismos logs aparecen directamente en esa terminal. Producción conserva sus niveles habituales y no activa este registro HTTP de desarrollo.
 
 ## Parada y comprobaciones
 

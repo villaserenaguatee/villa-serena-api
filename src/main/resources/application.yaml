@@ -107,3 +107,13 @@ villaserena:
     espera-minutos: 1
     # Cuántos correos pendientes toma cada vuelta del proceso programado.
     lote: 20
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local | dev
+logging:
+  level:
+    root: INFO
+    com.villaserena.api: DEBUG
