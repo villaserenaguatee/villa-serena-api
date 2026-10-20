@@ -27,6 +27,7 @@ public class ManejadorErrores {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ErrorRespuesta> api(ApiException e) {
+        log.debug("Error HTTP: estado={}, codigo={}", e.getEstado().value(), e.getCodigo());
         return ResponseEntity.status(e.getEstado())
                 .body(new ErrorRespuesta(e.getCodigo(), e.getMessage(), e.getDetalles()));
     }
