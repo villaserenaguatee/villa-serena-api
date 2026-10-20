@@ -15,12 +15,12 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Ítem del menú (tabla {@code items_menu}). La categoría es texto en la base, no
+ * Ítem del menú (tabla {@code menu_items}). La categoría es texto en la base, no
  * una tabla aparte; el contrato pide categorías con id, así que {@code MenuService}
  * los deriva.
  */
 @Entity
-@Table(name = "items_menu")
+@Table(name = "menu_items")
 @Getter
 @Setter
 public class ItemMenu {
@@ -29,33 +29,33 @@ public class ItemMenu {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "category", nullable = false)
     private String categoria;
 
-    @Column(nullable = false)
+    @Column(name = "name", nullable = false)
     private String nombre;
 
-    @Column(nullable = false)
+    @Column(name = "description", nullable = false)
     private String descripcion;
 
-    @Column(nullable = false)
+    @Column(name = "price", nullable = false)
     private BigDecimal precio;
 
-    @Column(name = "clave_foto")
+    @Column(name = "photo_key")
     private String claveFoto;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "availability", nullable = false)
     private DisponibilidadMenu disponibilidad;
 
     /** ACTIVO o INACTIVO: solo ADMIN los cambia (HU-ADM-05), fuera de este alcance. */
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private String estado;
 
-    @Column(name = "agotado_en")
+    @Column(name = "exhausted_at")
     private Instant agotadoEn;
 
-    @Column(name = "agotado_por_empleado_id")
+    @Column(name = "exhausted_by_employee_id")
     private Long agotadoPorEmpleadoId;
 
     public boolean estaActivo() {

@@ -28,22 +28,22 @@ public class RefreshToken {
     private String tokenHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo_usuario", nullable = false)
+    @Column(name = "user_type", nullable = false)
     private TipoUsuario tipoUsuario;
 
-    @Column(name = "empleado_id")
+    @Column(name = "employee_id")
     private Long empleadoId;
 
-    @Column(name = "huesped_id")
+    @Column(name = "guest_id")
     private Long huespedId;
 
-    @Column(name = "expira_en", nullable = false)
+    @Column(name = "expires_at", nullable = false)
     private Instant expiraEn;
 
-    @Column(name = "revocado_en")
+    @Column(name = "revoked_at")
     private Instant revocadoEn;
 
-    @Column(name = "creado_en", insertable = false, updatable = false)
+    @Column(name = "created_at", insertable = false, updatable = false)
     private Instant creadoEn;
 
     public boolean esValido(Instant ahora) {

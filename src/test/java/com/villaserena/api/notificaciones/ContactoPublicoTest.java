@@ -21,11 +21,11 @@ class ContactoPublicoTest {
  JdbcTemplate jdbc;JavaMailSender mail;ContactoPublicoController controller;String hash,estado;boolean creado;
  @BeforeEach void setup(){
   jdbc=mock(JdbcTemplate.class);mail=mock(JavaMailSender.class);var tm=mock(PlatformTransactionManager.class);when(tm.getTransaction(any())).thenReturn(new SimpleTransactionStatus());var config=mock(PropiedadesVillaSerena.class);when(config.notificaciones()).thenReturn(new PropiedadesVillaSerena.Notificaciones("Villa Serena <hotelvillaserena.gt@gmail.com>","","",5,1,10));var template=mock(TemplateEngine.class);when(template.process(eq("correo/contacto"),any(Context.class))).thenReturn("<p>Mensaje del visitante</p>");when(mail.createMimeMessage()).thenAnswer(i->new MimeMessage(Session.getInstance(new Properties())));
-  when(jdbc.update(startsWith("INSERT INTO contacto_web"),any(Object[].class))).thenAnswer(i->{if(creado)return 0;creado=true;Object[] args=(Object[])i.getRawArguments()[1];hash=(String)args[1];estado="ENVIANDO";return 1;});
+  when(jdbc.update(startsWith("INSERT INTO web_contact"),any(Object[].class))).thenAnswer(i->{if(creado)return 0;creado=true;Object[] args=(Object[])i.getRawArguments()[1];hash=(String)args[1];estado="ENVIANDO";return 1;});
   when(jdbc.queryForMap(anyString(),any(Object[].class))).thenAnswer(i->Map.of("huella",hash,"estado",estado));
   when(jdbc.queryForList(anyString(),eq(String.class),any(Object[].class))).thenAnswer(i->List.of(estado));
-  when(jdbc.update(startsWith("UPDATE contacto_web SET estado='ENVIADO'"),any(Object[].class))).thenAnswer(i->{estado="ENVIADO";return 1;});
-  when(jdbc.update(startsWith("UPDATE contacto_web SET estado=?"),any(Object[].class))).thenAnswer(i->{estado=(String)((Object[])i.getRawArguments()[1])[0];return 1;});
+  when(jdbc.update(startsWith("UPDATE web_contact SET status='ENVIADO'"),any(Object[].class))).thenAnswer(i->{estado="ENVIADO";return 1;});
+  when(jdbc.update(startsWith("UPDATE web_contact SET status=?"),any(Object[].class))).thenAnswer(i->{estado=(String)((Object[])i.getRawArguments()[1])[0];return 1;});
   controller=new ContactoPublicoController(jdbc,tm,mail,template,config,"hotelvillaserena.gt@gmail.com");
  }
  ContactoPublicoController.Peticion datos(){return new ContactoPublicoController.Peticion("Visitante Ejemplo","visitor@example.test","Comprobación aislada; no se envía por SMTP.");}

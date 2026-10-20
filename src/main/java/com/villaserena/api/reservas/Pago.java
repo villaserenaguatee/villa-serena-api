@@ -14,9 +14,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Pago de una cuenta (tabla {@code pagos}). Los pagos en línea guardan el checkout y el identificador del cobro. */
+/** Pago de una cuenta (tabla {@code payments}). Los pagos en línea guardan el checkout y el identificador del cobro. */
 @Entity
-@Table(name = "pagos")
+@Table(name = "payments")
 @Getter
 @Setter
 public class Pago {
@@ -25,37 +25,38 @@ public class Pago {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "cuenta_id", nullable = false)
+    @Column(name = "account_id", nullable = false)
     private Long cuentaId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "method", nullable = false)
     private MetodoPago metodo;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private EstadoPago estado;
 
-    @Column(nullable = false)
+    @Column(name = "amount", nullable = false)
     private BigDecimal monto;
 
+    @Column(name = "reference")
     private String referencia;
 
     @Column(name = "checkout_id")
     private String checkoutId;
 
-    @Column(name = "pago_externo_id")
+    @Column(name = "external_payment_id")
     private String pagoExternoId;
 
-    @Column(name = "registrado_por_empleado_id")
+    @Column(name = "recorded_by_employee_id")
     private Long registradoPorEmpleadoId;
 
-    @Column(name = "creado_en", nullable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant creadoEn;
 
-    @Column(name = "aprobado_en")
+    @Column(name = "approved_at")
     private Instant aprobadoEn;
 
-    @Column(name = "reembolsado_en")
+    @Column(name = "refunded_at")
     private Instant reembolsadoEn;
 }

@@ -127,18 +127,18 @@ class ReservaWebIntegrationTest {
         assertThat((String) JsonPath.read(cuerpo, "$.pagoVenceEn")).startsWith("2026-10-05T12:30:00-06:00");
 
         Reserva reserva = reservas.findByCodigo(JsonPath.read(cuerpo, "$.codigo")).orElseThrow();
-        assertThat(jdbc.queryForObject("SELECT estado FROM cuentas WHERE reserva_id = ?", String.class,
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM accounts WHERE reservation_id = ?", String.class,
                 reserva.getId())).isEqualTo("ABIERTA");
         assertThat(jdbc.queryForObject("""
-                SELECT total FROM cargos c JOIN cuentas cu ON cu.id = c.cuenta_id
-                WHERE cu.reserva_id = ? AND c.tipo = 'ALOJAMIENTO'""", BigDecimal.class, reserva.getId()))
+                SELECT total  FROM charges c JOIN accounts cu ON cu.id = c.account_id
+                WHERE cu.reservation_id = ? AND c.type = 'ALOJAMIENTO'""", BigDecimal.class, reserva.getId()))
                 .isEqualByComparingTo("1912.50");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM reserva_noches WHERE reserva_id = ?", Integer.class,
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM reservation_nights WHERE reservation_id = ?", Integer.class,
                 reserva.getId())).isEqualTo(2);
 
         // Mismo correo: se reutiliza el perfil del huésped sin cambiar sus datos.
         crearReserva(tipoId("Doble Superior"), "2026-10-20", "2026-10-21", "MARIA@correo.test", 201);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM huespedes WHERE lower(correo) = 'maria@correo.test'",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM guests WHERE lower(email) = 'maria@correo.test'",
                 Integer.class)).isEqualTo(1);
     }
 
@@ -159,11 +159,11 @@ class ReservaWebIntegrationTest {
                 .andExpect(jsonPath("$.estadoReserva").value("CONFIRMADA"))
                 .andExpect(jsonPath("$.estadoPago").value("APROBADO"))
                 .andExpect(jsonPath("$.puedeReintentar").value(false));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM pagos WHERE estado = 'APROBADO' AND checkout_id = 'cs_test_1'",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM payments WHERE status = 'APROBADO' AND checkout_id = 'cs_test_1'",
                 Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM historial_estados h JOIN reservas r ON r.id = h.id_entidad
-                WHERE h.tipo_entidad = 'RESERVA' AND r.codigo = ? AND h.estado_nuevo = 'CONFIRMADA'""",
+                SELECT count(*)  FROM status_history h JOIN reservations r ON r.id = h.entity_id
+                WHERE h.entity_type = 'RESERVA' AND r.code = ? AND h.new_status = 'CONFIRMADA'""",
                 Integer.class, codigo)).isEqualTo(1);
     }
 
@@ -190,7 +190,7 @@ class ReservaWebIntegrationTest {
                 .andExpect(jsonPath("$.estadoReserva").value("CANCELADA"))
                 .andExpect(jsonPath("$.estadoPago").value("FALLIDO"));
         assertThat(jdbc.queryForObject("""
-                SELECT c.estado FROM cuentas c JOIN reservas r ON r.id = c.reserva_id WHERE r.codigo = ?""",
+                SELECT c.status AS "estado" FROM accounts c JOIN reservations r ON r.id = c.reservation_id WHERE r.code = ?""",
                 String.class, codigo)).isEqualTo("CERRADA");
     }
 
@@ -221,11 +221,11 @@ class ReservaWebIntegrationTest {
     @Test
     void creaReservaWebSinNacionalidadYConservaElPerfilHistorico() throws Exception {
         crearReserva(tipoId("Estándar Jardín"), "2026-10-20", "2026-10-22", "nuevo@correo.test", 201);
-        assertThat(jdbc.queryForObject("SELECT nacionalidad FROM huespedes WHERE correo = 'nuevo@correo.test'",
+        assertThat(jdbc.queryForObject("SELECT nationality AS \"nacionalidad\" FROM guests WHERE email = 'nuevo@correo.test'",
                 String.class)).isNull();
-        jdbc.update("UPDATE huespedes SET nacionalidad = 'Mexicana' WHERE correo = 'nuevo@correo.test'");
+        jdbc.update("UPDATE guests SET nationality = 'Mexicana' WHERE email = 'nuevo@correo.test'");
         crearReserva(tipoId("Estándar Jardín"), "2026-10-23", "2026-10-24", "nuevo@correo.test", 201);
-        assertThat(jdbc.queryForObject("SELECT nacionalidad FROM huespedes WHERE correo = 'nuevo@correo.test'",
+        assertThat(jdbc.queryForObject("SELECT nationality AS \"nacionalidad\" FROM guests WHERE email = 'nuevo@correo.test'",
                 String.class)).isEqualTo("Mexicana");
     }
 
@@ -252,7 +252,7 @@ class ReservaWebIntegrationTest {
                 .andExpect(jsonPath("$.codigo").value("PAGO_EN_VERIFICACION"));
         org.mockito.Mockito.verify(pasarela, org.mockito.Mockito.times(1))
                 .crearSesion(anyString(), any(), anyString(), any(), any());
-        assertThat(jdbc.queryForObject("SELECT estado FROM pagos WHERE checkout_id = 'ch_en_proceso'", String.class))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM payments WHERE checkout_id = 'ch_en_proceso'", String.class))
                 .isEqualTo("PENDIENTE");
     }
 
@@ -301,7 +301,7 @@ class ReservaWebIntegrationTest {
                     .andExpect(jsonPath("$.estadoPago").value("PENDIENTE"));
         }
         assertThat(reservas.findByCodigo(codigo).orElseThrow().getEstado()).isEqualTo(EstadoReserva.PENDIENTE_PAGO);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM pagos WHERE checkout_id='ch_consulta'", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM payments WHERE checkout_id='ch_consulta'", Integer.class)).isEqualTo(1);
     }
 
     @Test
@@ -363,7 +363,7 @@ class ReservaWebIntegrationTest {
         mvc.perform(get("/api/v1/publico/reservas/{codigo}/estado", codigo))
                 .andExpect(jsonPath("$.accionPago").value("CONTINUAR"))
                 .andExpect(jsonPath("$.urlPago").value("https://pago.test/nuevo"));
-        assertThat(jdbc.queryForObject("SELECT estado FROM pagos WHERE checkout_id='ch_anterior'", String.class))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM payments WHERE checkout_id='ch_anterior'", String.class))
                 .isEqualTo("FALLIDO");
     }
 
@@ -387,7 +387,7 @@ class ReservaWebIntegrationTest {
     }
 
     private long tipoId(String nombre) {
-        return jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = ?", Long.class, nombre);
+        return jdbc.queryForObject("SELECT id  FROM room_types WHERE name = ?", Long.class, nombre);
     }
 
     private String crearReserva(long tipoId, String entrada, String salida, String correo, int estado)
@@ -415,8 +415,8 @@ class ReservaWebIntegrationTest {
         new java.security.SecureRandom().nextBytes(azar);
         String comprobante = Base64.getUrlEncoder().withoutPadding().encodeToString(azar);
         jdbc.update("""
-                INSERT INTO reserva_correo_verificaciones (id, correo, borrador, codigo_hash, creado_en, expira_en,
-                                                           verificado_en, comprobante_hash, comprobante_expira_en)
+                INSERT INTO reservation_email_verifications (id, email, draft, code_hash, created_at, expires_at,
+                                                           verified_at, proof_hash, proof_expires_at)
                 VALUES (?, lower(?), ?, 'NO_APLICA', ?, ?, ?, encode(sha256(convert_to(?, 'UTF8')), 'hex'), ?)""",
                 UUID.randomUUID(), correo, borrador, java.sql.Timestamp.from(RelojFijoConfig.AHORA),
                 java.sql.Timestamp.from(RelojFijoConfig.AHORA.plusSeconds(600)),

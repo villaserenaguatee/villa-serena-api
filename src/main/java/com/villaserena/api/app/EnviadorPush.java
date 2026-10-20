@@ -65,7 +65,7 @@ public class EnviadorPush implements EnviadorNotificacion {
 
     private boolean enEstadia(String codigoReserva) {
         Integer enEstadia = jdbc.queryForObject(
-                "SELECT count(*) FROM reservas WHERE codigo = ? AND estado = 'EN_ESTADIA'", Integer.class,
+                "SELECT count(*)  FROM reservations WHERE code = ? AND status = 'EN_ESTADIA'", Integer.class,
                 codigoReserva);
         return enEstadia != null && enEstadia > 0;
     }

@@ -52,16 +52,15 @@ public class ReservaDetalleService {
 
     @Transactional(readOnly = true)
     public ReservaDetalle de(Reserva r) {
-        String tipo = jdbc.queryForObject("SELECT nombre FROM tipos_habitacion WHERE id = ?", String.class,
+        String tipo = jdbc.queryForObject("SELECT name AS \"nombre\" FROM room_types WHERE id = ?", String.class,
                 r.getTipoHabitacionId());
         HabitacionReferencia habitacion = r.getHabitacionId() == null ? null
-                : jdbc.queryForObject("SELECT id, numero, piso FROM habitaciones WHERE id = ?",
+                : jdbc.queryForObject("SELECT id, number AS \"numero\", floor AS \"piso\" FROM rooms WHERE id = ?",
                         (rs, i) -> new HabitacionReferencia(rs.getLong(1), rs.getString(2), rs.getInt(3)),
                         r.getHabitacionId());
         HuespedVista huesped = huespedes.findById(r.getHuespedId()).map(HuespedVista::de).orElseThrow();
         List<HuespedAdicionalVista> adicionales = jdbc.query("""
-                SELECT id, nombre_completo, tipo_documento, numero_documento, nacionalidad
-                FROM huespedes_adicionales WHERE reserva_id = ? ORDER BY id""",
+                SELECT id, full_name AS "nombre_completo", document_type AS "tipo_documento", document_number AS "numero_documento", nationality AS "nacionalidad" FROM additional_guests WHERE reservation_id = ? ORDER BY id""",
                 (rs, i) -> new HuespedAdicionalVista(rs.getLong(1), rs.getString(2),
                         TipoDocumento.valueOf(rs.getString(3)), rs.getString(4), rs.getString(5)),
                 r.getId());
@@ -78,11 +77,10 @@ public class ReservaDetalleService {
     /** Responsable: nombre del empleado, "Cliente web", el código del canal o "SISTEMA". */
     private List<HistorialEstadoVista> historial(Reserva r) {
         return jdbc.query("""
-                SELECT h.estado_anterior, h.estado_nuevo, h.tipo_responsable, e.nombre_completo, h.fecha, h.motivo
-                FROM historial_estados h
-                LEFT JOIN empleados e ON e.id = h.id_responsable
-                WHERE h.tipo_entidad = 'RESERVA' AND h.id_entidad = ?
-                ORDER BY h.fecha, h.id""",
+                SELECT h.previous_status AS "estado_anterior", h.new_status AS "estado_nuevo", h.responsible_type AS "tipo_responsable", e.full_name AS "nombre_completo", h.date AS "fecha", h.reason AS "motivo" FROM status_history h
+                LEFT JOIN employees e ON e.id = h.responsible_id
+                WHERE h.entity_type = 'RESERVA' AND h.entity_id = ?
+                ORDER BY h.date, h.id""",
                 (rs, i) -> new HistorialEstadoVista(
                         rs.getString(1) == null ? null : EstadoReserva.valueOf(rs.getString(1)),
                         EstadoReserva.valueOf(rs.getString(2)),

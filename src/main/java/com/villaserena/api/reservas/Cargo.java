@@ -14,9 +14,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Cargo de una cuenta (tabla {@code cargos}). Nunca se borra; se anula con motivo. */
+/** Cargo de una cuenta (tabla {@code charges}). Nunca se borra; se anula con motivo. */
 @Entity
-@Table(name = "cargos")
+@Table(name = "charges")
 @Getter
 @Setter
 public class Cargo {
@@ -25,48 +25,48 @@ public class Cargo {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "cuenta_id", nullable = false)
+    @Column(name = "account_id", nullable = false)
     private Long cuentaId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "type", nullable = false)
     private TipoCargo tipo;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "categoria_servicio")
+    @Column(name = "service_category")
     private CategoriaServicio categoriaServicio;
 
-    @Column(nullable = false)
+    @Column(name = "concept", nullable = false)
     private String concepto;
 
-    @Column(nullable = false)
+    @Column(name = "quantity", nullable = false)
     private int cantidad;
 
-    @Column(name = "precio_unitario", nullable = false)
+    @Column(name = "unit_price", nullable = false)
     private BigDecimal precioUnitario;
 
-    @Column(nullable = false)
+    @Column(name = "total", nullable = false)
     private BigDecimal total;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private EstadoCargo estado = EstadoCargo.VIGENTE;
 
-    @Column(name = "pedido_id")
+    @Column(name = "order_id")
     private Long pedidoId;
 
-    @Column(name = "creado_por_empleado_id")
+    @Column(name = "created_by_employee_id")
     private Long creadoPorEmpleadoId;
 
-    @Column(name = "creado_en", nullable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant creadoEn;
 
-    @Column(name = "motivo_anulacion")
+    @Column(name = "void_reason")
     private String motivoAnulacion;
 
-    @Column(name = "anulado_por_empleado_id")
+    @Column(name = "voided_by_employee_id")
     private Long anuladoPorEmpleadoId;
 
-    @Column(name = "anulado_en")
+    @Column(name = "voided_at")
     private Instant anuladoEn;
 }

@@ -165,7 +165,7 @@ class AuthIntegrationTest {
     @Test
     void huespedNoPuedeUsarRutasDelPersonal() throws Exception {
         Long huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Huésped Prueba', 'huesped.prueba@correo.test', '+502 5555 5555', 'Guatemalteca', 'DPI', '1234567890101')
                 RETURNING id""", Long.class);
         String acceso = tokenService.emitirParaHuesped(huespedId).accessToken();

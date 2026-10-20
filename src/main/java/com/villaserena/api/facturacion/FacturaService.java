@@ -46,26 +46,26 @@ public class FacturaService implements EmisorFactura {
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public FacturaEmitida emitir(long cuentaId, String nit, String nombreComprador) {
-        if (jdbc.queryForObject("SELECT count(*) FROM facturas WHERE cuenta_id = ?", Integer.class, cuentaId) > 0) {
+        if (jdbc.queryForObject("SELECT count(*)  FROM invoices WHERE account_id = ?", Integer.class, cuentaId) > 0) {
             throw ApiException.conflicto("FACTURA_EXISTENTE", "Esta cuenta ya tiene su factura.");
         }
-        Serie serie = jdbc.query("SELECT id, serie, ultimo_numero FROM series_factura ORDER BY id LIMIT 1 FOR UPDATE",
+        Serie serie = jdbc.query("SELECT id, series AS \"serie\", last_number AS \"ultimo_numero\" FROM invoice_series ORDER BY id LIMIT 1 FOR UPDATE",
                 (rs, i) -> new Serie(rs.getLong(1), rs.getString(2), rs.getInt(3))).stream().findFirst()
                 .orElseThrow(() -> ApiException.conflicto("SERIE_NO_CONFIGURADA",
                         "No hay una serie de facturación configurada."));
-        if (jdbc.queryForObject("SELECT count(*) FROM configuracion_hotel", Integer.class) == 0) {
+        if (jdbc.queryForObject("SELECT count(*)  FROM hotel_configuration", Integer.class) == 0) {
             throw ApiException.conflicto("HOTEL_NO_CONFIGURADO", "Faltan los datos fiscales del hotel.");
         }
         BigDecimal total = jdbc.queryForObject(
-                "SELECT coalesce(sum(total), 0) FROM cargos WHERE cuenta_id = ? AND estado = 'VIGENTE'",
+                "SELECT coalesce(sum(total), 0)  FROM charges WHERE account_id = ? AND status = 'VIGENTE'",
                 BigDecimal.class, cuentaId);
         int numero = serie.ultimoNumero() + 1;
-        jdbc.update("UPDATE series_factura SET ultimo_numero = ? WHERE id = ?", numero, serie.id());
+        jdbc.update("UPDATE invoice_series SET last_number = ? WHERE id = ?", numero, serie.id());
         long id = jdbc.queryForObject("""
-                INSERT INTO facturas (cuenta_id, serie_id, numero, emitida_en, nit_comprador, nombre_comprador, total,
-                                      nombre_comercial, razon_social, nit_hotel, direccion_fiscal, direccion)
-                SELECT ?, ?, ?, ?, ?, ?, ?, nombre_comercial, razon_social, nit, direccion_fiscal, direccion
-                FROM configuracion_hotel WHERE id = 1
+                INSERT INTO invoices (account_id, series_id, number, issued_at, buyer_tax_id, buyer_name, total,
+                                      trade_name, legal_name, hotel_tax_id, tax_address, address)
+                SELECT ?, ?, ?, ?, ?, ?, ?, trade_name, legal_name, tax_id, tax_address, address
+                FROM hotel_configuration WHERE id = 1
                 RETURNING id""", Long.class,
                 cuentaId, serie.id(), numero, Timestamp.from(reloj.instant()), nit, nombreComprador, total);
 
@@ -76,8 +76,8 @@ public class FacturaService implements EmisorFactura {
 
     private void encolarCorreo(FacturaDetalle f, long cuentaId) {
         jdbc.query("""
-                SELECT h.correo, h.nombre_completo FROM cuentas cu
-                JOIN reservas r ON r.id = cu.reserva_id JOIN huespedes h ON h.id = r.huesped_id
+                SELECT h.email AS "correo", h.full_name AS "nombre_completo" FROM accounts cu
+                JOIN reservations r ON r.id = cu.reservation_id JOIN guests h ON h.id = r.guest_id
                 WHERE cu.id = ?""", rs -> {
             Map<String, Object> datos = new LinkedHashMap<>();
             datos.put("facturaId", f.id());

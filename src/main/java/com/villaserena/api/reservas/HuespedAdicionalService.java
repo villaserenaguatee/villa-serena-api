@@ -26,14 +26,14 @@ public class HuespedAdicionalService {
     public HuespedAdicionalVista agregar(String codigo, HuespedAdicionalPeticion p) {
         // Bloquea la reserva para que dos registros a la vez no superen el máximo.
         DatosReserva reserva = jdbc.query(
-                "SELECT id, estado, numero_huespedes FROM reservas WHERE codigo = ? FOR UPDATE",
+                "SELECT id, status AS \"estado\", guest_count AS \"numero_huespedes\" FROM reservations WHERE code = ? FOR UPDATE",
                 (rs, i) -> new DatosReserva(rs.getLong(1), EstadoReserva.valueOf(rs.getString(2)), rs.getInt(3)),
                 codigo).stream().findFirst().orElseThrow(ApiException::noEncontrado);
         if (reserva.estado() != EstadoReserva.CONFIRMADA && reserva.estado() != EstadoReserva.EN_ESTADIA) {
             throw ApiException.conflicto("ESTADO_INVALIDO",
                     "Solo se agregan huéspedes a reservas confirmadas o en estadía.");
         }
-        int adicionales = jdbc.queryForObject("SELECT count(*) FROM huespedes_adicionales WHERE reserva_id = ?",
+        int adicionales = jdbc.queryForObject("SELECT count(*)  FROM additional_guests WHERE reservation_id = ?",
                 Integer.class, reserva.id());
         if (1 + adicionales >= reserva.numeroHuespedes()) {
             throw ApiException.conflicto("HUESPEDES_EXCEDIDOS", "La reserva es para " + reserva.numeroHuespedes()
@@ -41,8 +41,8 @@ public class HuespedAdicionalService {
                     + " y ya están todos registrados.");
         }
         long id = jdbc.queryForObject("""
-                INSERT INTO huespedes_adicionales
-                    (reserva_id, nombre_completo, tipo_documento, numero_documento, nacionalidad)
+                INSERT INTO additional_guests
+                    (reservation_id, full_name, document_type, document_number, nationality)
                 VALUES (?, ?, ?, ?, ?) RETURNING id""", Long.class,
                 reserva.id(), p.nombreCompleto().trim(), p.tipoDocumento().name(), p.numeroDocumento().trim(),
                 p.nacionalidad());

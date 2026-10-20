@@ -69,7 +69,7 @@ class AsignacionConcurrenteTest {
     @BeforeEach
     void preparar() {
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Concurrencia', 'concurrencia@correo.test', '+502 5555 4444', 'Guatemalteca', 'DPI', '4444444440101')
                 RETURNING id""", Long.class);
         reservaA = reserva("VS-CONCA1");
@@ -78,8 +78,8 @@ class AsignacionConcurrenteTest {
 
     @AfterEach
     void limpiar() {
-        jdbc.update("DELETE FROM reservas WHERE id IN (?, ?)", reservaA, reservaB);
-        jdbc.update("DELETE FROM huespedes WHERE id = ?", huespedId);
+        jdbc.update("DELETE FROM reservations WHERE id IN (?, ?)", reservaA, reservaB);
+        jdbc.update("DELETE FROM guests WHERE id = ?", huespedId);
         reloj.reiniciar();
     }
 
@@ -92,7 +92,7 @@ class AsignacionConcurrenteTest {
     void dosAsignacionesALaVezSoloUnaGana() throws Exception {
         long habitacion = habitacion103();
         CompletableFuture<Void> otra = enOtraTransaccion(
-                "UPDATE reservas SET habitacion_id = %d WHERE id = %d".formatted(habitacion, reservaB));
+                "UPDATE reservations SET room_id = %d WHERE id = %d".formatted(habitacion, reservaB));
 
         asignarA(habitacion)
                 .andExpect(status().isConflict())
@@ -111,10 +111,10 @@ class AsignacionConcurrenteTest {
     void laRestriccionExcludeSeTraduceA409() throws Exception {
         long habitacion = habitacion103();
         jdbc.update("""
-                UPDATE reservas SET habitacion_id = ?, fecha_entrada = '2026-10-25', fecha_salida = '2026-10-27'
+                UPDATE reservations SET room_id = ?, checkin_date = '2026-10-25', checkout_date = '2026-10-27'
                 WHERE id = ?""", habitacion, reservaB);
         CompletableFuture<Void> otra = enOtraTransaccion("""
-                UPDATE reservas SET fecha_entrada = '2026-10-20', fecha_salida = '2026-10-22' WHERE id = %d"""
+                UPDATE reservations SET checkin_date = '2026-10-20', checkout_date = '2026-10-22' WHERE id = %d"""
                 .formatted(reservaB));
 
         asignarA(habitacion)
@@ -143,19 +143,19 @@ class AsignacionConcurrenteTest {
     }
 
     private long habitacion103() {
-        return jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = '103'", Long.class);
+        return jdbc.queryForObject("SELECT id  FROM rooms WHERE number = '103'", Long.class);
     }
 
     private Long habitacionDe(long reserva) {
-        return jdbc.queryForObject("SELECT habitacion_id FROM reservas WHERE id = ?", Long.class, reserva);
+        return jdbc.queryForObject("SELECT room_id AS \"habitacion_id\" FROM reservations WHERE id = ?", Long.class, reserva);
     }
 
     private long reserva(String codigo) {
         return jdbc.queryForObject("""
-                INSERT INTO reservas (codigo, huesped_id, tipo_habitacion_id, fecha_entrada, fecha_salida,
-                                      numero_huespedes, estado, canal, total)
+                INSERT INTO reservations (code, guest_id, room_type_id, checkin_date, checkout_date,
+                                      guest_count, status, channel, total)
                 SELECT ?, ?, id, '2026-10-20', '2026-10-22', 1, 'CONFIRMADA', 'RECEPCION', 1700.00
-                FROM tipos_habitacion WHERE nombre = 'Doble Superior'
+                FROM room_types WHERE name = 'Doble Superior'
                 RETURNING id""", Long.class, codigo, huespedId);
     }
 

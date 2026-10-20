@@ -53,16 +53,16 @@ public class LimpiezaService {
     @Transactional(readOnly = true)
     public List<HabitacionLimpieza> pendientes() {
         return jdbc.query("""
-                SELECT h.id, h.numero, h.piso, h.condicion, e.id, e.nombre_completo,
-                       EXISTS (SELECT 1 FROM reservas r WHERE r.habitacion_id = h.id
-                               AND r.estado = 'CONFIRMADA' AND r.fecha_entrada = ?) AS llegada_hoy,
-                       coalesce((SELECT max(he.fecha) FROM historial_estados he
-                                 WHERE he.tipo_entidad = 'HABITACION_CONDICION' AND he.id_entidad = h.id
-                                   AND he.estado_nuevo = 'SUCIA'), now()) AS sucia_desde
-                FROM habitaciones h
-                LEFT JOIN empleados e ON e.id = h.limpieza_empleado_id
-                WHERE h.estado = 'ACTIVO' AND h.ocupacion = 'LIBRE' AND h.condicion IN ('SUCIA', 'EN_LIMPIEZA')
-                ORDER BY llegada_hoy DESC, sucia_desde, h.numero""",
+                SELECT h.id, h.number AS "numero", h.floor AS "piso", h.condition AS "condicion", e.id, e.full_name AS "nombre_completo",
+                       EXISTS (SELECT 1 FROM reservations r WHERE r.room_id = h.id
+                               AND r.status = 'CONFIRMADA' AND r.checkin_date = ?) AS llegada_hoy,
+                       coalesce((SELECT max(he.date) FROM status_history he
+                                 WHERE he.entity_type = 'HABITACION_CONDICION' AND he.entity_id = h.id
+                                   AND he.new_status = 'SUCIA'), now()) AS sucia_desde
+                 FROM rooms h
+                LEFT JOIN employees e ON e.id = h.cleaning_employee_id
+                WHERE h.status = 'ACTIVO' AND h.occupancy = 'LIBRE' AND h.condition IN ('SUCIA', 'EN_LIMPIEZA')
+                ORDER BY llegada_hoy DESC, sucia_desde, h.number""",
                 (rs, i) -> new HabitacionLimpieza(new HabitacionReferencia(rs.getLong(1), rs.getString(2),
                         rs.getInt(3)), CondicionHabitacion.valueOf(rs.getString(4)), rs.getBoolean(7),
                         fecha(rs.getTimestamp(8)),
@@ -114,13 +114,13 @@ public class LimpiezaService {
     }
 
     private ResultadoCondicionHabitacion cambiar(Habitacion h, String condicion, Long aCargo, long empleadoId) {
-        jdbc.update("UPDATE habitaciones SET condicion = ?, limpieza_empleado_id = ? WHERE id = ?",
+        jdbc.update("UPDATE rooms SET condition = ?, cleaning_employee_id = ? WHERE id = ?",
                 condicion, aCargo, h.id());
         historial.registrar(TipoEntidadHistorial.HABITACION_CONDICION, h.id(), h.condicion(), condicion,
                 Responsable.empleado(empleadoId), null);
         publicarDespuesDeConfirmar(h.id());
         ResponsableEmpleado responsable = aCargo == null ? null : new ResponsableEmpleado(aCargo,
-                jdbc.queryForObject("SELECT nombre_completo FROM empleados WHERE id = ?", String.class, aCargo));
+                jdbc.queryForObject("SELECT full_name AS \"nombre_completo\" FROM employees WHERE id = ?", String.class, aCargo));
         return new ResultadoCondicionHabitacion(new HabitacionReferencia(h.id(), h.numero(), h.piso()),
                 OcupacionHabitacion.valueOf(h.ocupacion()), CondicionHabitacion.valueOf(condicion), responsable);
     }
@@ -132,15 +132,14 @@ public class LimpiezaService {
      */
     private Habitacion bloquear(long habitacionId) {
         Habitacion h = jdbc.query("""
-                SELECT id, numero, piso, ocupacion, condicion, limpieza_empleado_id
-                FROM habitaciones WHERE id = ? AND estado = 'ACTIVO' FOR UPDATE""",
+                SELECT id, number AS "numero", floor AS "piso", occupancy AS "ocupacion", condition AS "condicion", cleaning_employee_id AS "limpieza_empleado_id" FROM rooms WHERE id = ? AND status = 'ACTIVO' FOR UPDATE""",
                 (rs, i) -> new Habitacion(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getString(4),
                         rs.getString(5), rs.getLong(6), null),
                 habitacionId).stream().findFirst().orElseThrow(ApiException::noEncontrado);
         if (h.aCargo() == 0) {
             return h;
         }
-        String nombre = jdbc.queryForObject("SELECT nombre_completo FROM empleados WHERE id = ?", String.class,
+        String nombre = jdbc.queryForObject("SELECT full_name AS \"nombre_completo\" FROM employees WHERE id = ?", String.class,
                 h.aCargo());
         return new Habitacion(h.id(), h.numero(), h.piso(), h.ocupacion(), h.condicion(), h.aCargo(), nombre);
     }

@@ -109,22 +109,22 @@ class WebSocketIntegrationTest {
 
         reloj.reiniciar();
         recepcionista = jdbc.queryForObject(
-                "SELECT id FROM empleados WHERE correo = 'ana.perez@villaserena.test'", Long.class);
+                "SELECT id  FROM employees WHERE email = 'ana.perez@villaserena.test'", Long.class);
         empleadoRoomService = jdbc.queryForObject(
-                "SELECT id FROM empleados WHERE rol = 'ROOM_SERVICE' LIMIT 1", Long.class);
+                "SELECT id  FROM employees WHERE role = 'ROOM_SERVICE' LIMIT 1", Long.class);
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Ana Morales', 'ws.ana@correo.test', '+502 5555 1212', 'Guatemalteca', 'DPI', '7777777777777')
                 RETURNING id""", Long.class);
-        habitacionId = jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = '203'", Long.class);
-        long tipo = jdbc.queryForObject("SELECT tipo_habitacion_id FROM habitaciones WHERE id = ?", Long.class,
+        habitacionId = jdbc.queryForObject("SELECT id  FROM rooms WHERE number = '203'", Long.class);
+        long tipo = jdbc.queryForObject("SELECT room_type_id AS \"tipo_habitacion_id\" FROM rooms WHERE id = ?", Long.class,
                 habitacionId);
         Reserva reserva = reservaService.crear(SolicitudReserva.recepcion(huespedId, tipo,
                 LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-08"), 1, habitacionId, recepcionista));
         codigo = reserva.getCodigo();
         reservaId = reserva.getId();
         checkinService.hacerCheckin(codigo, recepcionista);
-        itemCafe = jdbc.queryForObject("SELECT id FROM items_menu WHERE nombre = 'Café de Antigua'", Long.class);
+        itemCafe = jdbc.queryForObject("SELECT id  FROM menu_items WHERE name = 'Café de Antigua'", Long.class);
     }
 
     // ------------------------------------------------------------------
@@ -240,7 +240,7 @@ class WebSocketIntegrationTest {
         BlockingQueue<String> recibidos = suscribir(sesion, Destinos.HABITACIONES);
         Thread.sleep(300);
 
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE id = ?", habitacionId);
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE id = ?", habitacionId);
         // El evento 4 lo dispara quien cambia la habitación (el check-in, el
         // check-out o la limpieza de OBJ-2C); aquí se llama directo.
         eventosTiempoReal.habitacionCambio(habitacionId);
@@ -286,30 +286,30 @@ class WebSocketIntegrationTest {
         reloj.reiniciar();
         if (reservaId != null) {
             jdbc.update("""
-                    DELETE FROM historial_estados WHERE tipo_entidad = 'PEDIDO' AND id_entidad IN
-                        (SELECT id FROM pedidos WHERE reserva_id = ?)""", reservaId);
-            jdbc.update("DELETE FROM outbox WHERE tipo = 'PUSH_PEDIDO_ENTREGADO'");
+                    DELETE FROM status_history WHERE entity_type = 'PEDIDO' AND entity_id IN
+                        (SELECT id FROM orders WHERE reservation_id = ?)""", reservaId);
+            jdbc.update("DELETE FROM outbox WHERE type = 'PUSH_PEDIDO_ENTREGADO'");
             jdbc.update("""
-                    DELETE FROM cargos WHERE cuenta_id IN (SELECT id FROM cuentas WHERE reserva_id = ?)""", reservaId);
-            jdbc.update("DELETE FROM pedido_items WHERE pedido_id IN (SELECT id FROM pedidos WHERE reserva_id = ?)",
+                    DELETE FROM charges WHERE account_id IN (SELECT id FROM accounts WHERE reservation_id = ?)""", reservaId);
+            jdbc.update("DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE reservation_id = ?)",
                     reservaId);
-            jdbc.update("DELETE FROM pedidos WHERE reserva_id = ?", reservaId);
-            jdbc.update("DELETE FROM pagos WHERE cuenta_id IN (SELECT id FROM cuentas WHERE reserva_id = ?)",
+            jdbc.update("DELETE FROM orders WHERE reservation_id = ?", reservaId);
+            jdbc.update("DELETE FROM payments WHERE account_id IN (SELECT id FROM accounts WHERE reservation_id = ?)",
                     reservaId);
-            jdbc.update("DELETE FROM cuentas WHERE reserva_id = ?", reservaId);
-            jdbc.update("DELETE FROM reserva_noches WHERE reserva_id = ?", reservaId);
-            jdbc.update("DELETE FROM historial_estados WHERE tipo_entidad = 'RESERVA' AND id_entidad = ?", reservaId);
-            jdbc.update("DELETE FROM reservas WHERE id = ?", reservaId);
+            jdbc.update("DELETE FROM accounts WHERE reservation_id = ?", reservaId);
+            jdbc.update("DELETE FROM reservation_nights WHERE reservation_id = ?", reservaId);
+            jdbc.update("DELETE FROM status_history WHERE entity_type = 'RESERVA' AND entity_id = ?", reservaId);
+            jdbc.update("DELETE FROM reservations WHERE id = ?", reservaId);
         }
         if (habitacionId != null) {
-            jdbc.update("DELETE FROM historial_estados WHERE tipo_entidad LIKE 'HABITACION%' AND id_entidad = ?",
+            jdbc.update("DELETE FROM status_history WHERE entity_type LIKE 'HABITACION%' AND entity_id = ?",
                     habitacionId);
-            jdbc.update("UPDATE habitaciones SET ocupacion = 'LIBRE', condicion = 'LIMPIA' WHERE id = ?",
+            jdbc.update("UPDATE rooms SET occupancy = 'LIBRE', condition = 'LIMPIA' WHERE id = ?",
                     habitacionId);
         }
         if (huespedId != null) {
-            jdbc.update("DELETE FROM refresh_tokens WHERE huesped_id = ?", huespedId);
-            jdbc.update("DELETE FROM huespedes WHERE id = ?", huespedId);
+            jdbc.update("DELETE FROM refresh_tokens WHERE guest_id = ?", huespedId);
+            jdbc.update("DELETE FROM guests WHERE id = ?", huespedId);
         }
     }
 }

@@ -32,32 +32,32 @@ public class Outbox {
     private Long id;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "type", nullable = false)
     private TipoNotificacion tipo;
 
-    @Column(nullable = false)
+    @Column(name = "recipient", nullable = false)
     private String destinatario;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(nullable = false)
+    @Column(name = "payload", nullable = false)
     private String payload;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private EstadoNotificacion estado = EstadoNotificacion.PENDIENTE;
 
-    @Column(nullable = false)
+    @Column(name = "attempts", nullable = false)
     private int intentos;
 
-    @Column(name = "proximo_intento_en", nullable = false)
+    @Column(name = "next_attempt_at", nullable = false)
     private Instant proximoIntentoEn;
 
-    @Column(name = "ultimo_error")
+    @Column(name = "last_error")
     private String ultimoError;
 
-    @Column(name = "creado_en", nullable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant creadoEn;
 
-    @Column(name = "enviado_en")
+    @Column(name = "sent_at")
     private Instant enviadoEn;
 }

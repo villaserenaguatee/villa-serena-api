@@ -35,9 +35,8 @@ public class MisReservasService {
     @Transactional(readOnly = true)
     public List<ReservaAppResumen> mias(long huespedId) {
         return jdbc.query("""
-                SELECT codigo, fecha_entrada, fecha_salida, estado
-                FROM reservas WHERE huesped_id = ?
-                ORDER BY fecha_entrada DESC, id DESC""",
+                SELECT code AS "codigo", checkin_date AS "fecha_entrada", checkout_date AS "fecha_salida", status AS "estado" FROM reservations WHERE guest_id = ?
+                ORDER BY checkin_date DESC, id DESC""",
                 (rs, i) -> new ReservaAppResumen(rs.getString(1), rs.getObject(2, java.time.LocalDate.class),
                         rs.getObject(3, java.time.LocalDate.class), EstadoReserva.valueOf(rs.getString(4))),
                 huespedId);
@@ -46,12 +45,11 @@ public class MisReservasService {
     @Transactional(readOnly = true)
     public ReservaAppDetalle mia(String codigo, long huespedId) {
         return jdbc.query("""
-                SELECT r.codigo, r.fecha_entrada, r.fecha_salida, r.estado, r.numero_huespedes,
-                       t.id, t.nombre, h.id, h.numero, h.piso
-                FROM reservas r
-                JOIN tipos_habitacion t ON t.id = r.tipo_habitacion_id
-                LEFT JOIN habitaciones h ON h.id = r.habitacion_id
-                WHERE r.codigo = ? AND r.huesped_id = ?""",
+                SELECT r.code AS "codigo", r.checkin_date AS "fecha_entrada", r.checkout_date AS "fecha_salida", r.status AS "estado", r.guest_count AS "numero_huespedes",
+                       t.id, t.name AS "nombre", h.id, h.number AS "numero", h.floor AS "piso" FROM reservations r
+                JOIN room_types t ON t.id = r.room_type_id
+                LEFT JOIN rooms h ON h.id = r.room_id
+                WHERE r.code = ? AND r.guest_id = ?""",
                 (rs, i) -> detalle(rs), codigo, huespedId).stream()
                 .findFirst()
                 .orElseThrow(ApiException::noEncontrado);

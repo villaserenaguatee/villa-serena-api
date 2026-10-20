@@ -107,15 +107,15 @@ public class CuentaService {
 
     private CuentaRecepcion vista(Reserva reserva) {
         Cuenta cuenta = cuentas.findByReservaId(reserva.getId()).orElseThrow(ApiException::noEncontrado);
-        String nombre = jdbc.queryForObject("SELECT nombre_completo FROM huespedes WHERE id = ?", String.class,
+        String nombre = jdbc.queryForObject("SELECT full_name AS \"nombre_completo\" FROM guests WHERE id = ?", String.class,
                 reserva.getHuespedId());
         List<PrecioNoche> noches = jdbc.query("""
-                SELECT fecha, precio, temporada_nombre, fin_de_semana FROM reserva_noches
-                WHERE reserva_id = ? ORDER BY fecha""",
+                SELECT date AS "fecha", price AS "precio", season_name AS "temporada_nombre", is_weekend AS "fin_de_semana" FROM reservation_nights
+                WHERE reservation_id = ? ORDER BY date""",
                 (rs, i) -> new PrecioNoche(rs.getObject(1, java.time.LocalDate.class), rs.getBigDecimal(2),
                         rs.getString(3), rs.getBoolean(4)),
                 reserva.getId());
-        Long facturaId = jdbc.query("SELECT id FROM facturas WHERE cuenta_id = ?", (rs, i) -> rs.getLong(1),
+        Long facturaId = jdbc.query("SELECT id  FROM invoices WHERE account_id = ?", (rs, i) -> rs.getLong(1),
                 cuenta.getId()).stream().findFirst().orElse(null);
         BigDecimal cargosVigentes = totalCargosVigentes(cuenta.getId());
         BigDecimal pagosAprobados = totalPagosAprobados(cuenta.getId());
@@ -126,13 +126,12 @@ public class CuentaService {
 
     private List<CargoCuentaRecepcion> cargosDe(long cuentaId) {
         return jdbc.query("""
-                SELECT c.id, c.creado_en, c.tipo, c.concepto, c.cantidad, c.precio_unitario, c.total, c.estado,
-                       c.motivo_anulacion, e.nombre_completo, a.nombre_completo
-                FROM cargos c
-                LEFT JOIN empleados e ON e.id = c.creado_por_empleado_id
-                LEFT JOIN empleados a ON a.id = c.anulado_por_empleado_id
-                WHERE c.cuenta_id = ?
-                ORDER BY c.creado_en, c.id""",
+                SELECT c.id, c.created_at AS "creado_en", c.type AS "tipo", c.concept AS "concepto", c.quantity AS "cantidad", c.unit_price AS "precio_unitario", c.total, c.status AS "estado",
+                       c.void_reason AS "motivo_anulacion", e.full_name AS "nombre_completo", a.full_name AS "nombre_completo" FROM charges c
+                LEFT JOIN employees e ON e.id = c.created_by_employee_id
+                LEFT JOIN employees a ON a.id = c.voided_by_employee_id
+                WHERE c.account_id = ?
+                ORDER BY c.created_at, c.id""",
                 (rs, i) -> new CargoCuentaRecepcion(rs.getLong(1), fecha(rs.getTimestamp(2)),
                         TipoCargo.valueOf(rs.getString(3)), rs.getString(4), rs.getInt(5), rs.getBigDecimal(6),
                         rs.getBigDecimal(7), EstadoCargo.valueOf(rs.getString(8)), rs.getString(9),
@@ -142,11 +141,10 @@ public class CuentaService {
 
     private List<PagoCuentaRecepcion> pagosDe(long cuentaId, CanalReserva canal) {
         return jdbc.query("""
-                SELECT p.id, p.creado_en, p.metodo, p.monto, p.estado, p.referencia, e.nombre_completo
-                FROM pagos p
-                LEFT JOIN empleados e ON e.id = p.registrado_por_empleado_id
-                WHERE p.cuenta_id = ?
-                ORDER BY p.creado_en, p.id""",
+                SELECT p.id, p.created_at AS "creado_en", p.method AS "metodo", p.amount AS "monto", p.status AS "estado", p.reference AS "referencia", e.full_name AS "nombre_completo" FROM payments p
+                LEFT JOIN employees e ON e.id = p.recorded_by_employee_id
+                WHERE p.account_id = ?
+                ORDER BY p.created_at, p.id""",
                 (rs, i) -> {
                     MetodoPago metodo = MetodoPago.valueOf(rs.getString(3));
                     String responsable = rs.getString(7) != null ? rs.getString(7)
@@ -159,13 +157,13 @@ public class CuentaService {
 
     private BigDecimal totalCargosVigentes(long cuentaId) {
         return jdbc.queryForObject(
-                "SELECT coalesce(sum(total), 0) FROM cargos WHERE cuenta_id = ? AND estado = 'VIGENTE'",
+                "SELECT coalesce(sum(total), 0)  FROM charges WHERE account_id = ? AND status = 'VIGENTE'",
                 BigDecimal.class, cuentaId).setScale(2);
     }
 
     private BigDecimal totalPagosAprobados(long cuentaId) {
         return jdbc.queryForObject(
-                "SELECT coalesce(sum(monto), 0) FROM pagos WHERE cuenta_id = ? AND estado = 'APROBADO'",
+                "SELECT coalesce(sum(amount), 0)  FROM payments WHERE account_id = ? AND status = 'APROBADO'",
                 BigDecimal.class, cuentaId).setScale(2);
     }
 

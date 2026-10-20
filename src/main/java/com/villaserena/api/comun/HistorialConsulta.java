@@ -26,11 +26,10 @@ public class HistorialConsulta {
 
     public List<HistorialOperacionVista> de(TipoEntidadHistorial entidad, long idEntidad) {
         return jdbc.query("""
-                SELECT h.estado_anterior, h.estado_nuevo, h.tipo_responsable, e.nombre_completo, h.fecha, h.motivo
-                FROM historial_estados h
-                LEFT JOIN empleados e ON e.id = h.id_responsable
-                WHERE h.tipo_entidad = ? AND h.id_entidad = ?
-                ORDER BY h.fecha, h.id""",
+                SELECT h.previous_status AS "estado_anterior", h.new_status AS "estado_nuevo", h.responsible_type AS "tipo_responsable", e.full_name AS "nombre_completo", h.date AS "fecha", h.reason AS "motivo" FROM status_history h
+                LEFT JOIN employees e ON e.id = h.responsible_id
+                WHERE h.entity_type = ? AND h.entity_id = ?
+                ORDER BY h.date, h.id""",
                 (rs, i) -> new HistorialOperacionVista(rs.getString(1), rs.getString(2),
                         responsable(rs.getString(3), rs.getString(4)),
                         OffsetDateTime.ofInstant(rs.getObject(5, Timestamp.class).toInstant(), reloj.getZone()),

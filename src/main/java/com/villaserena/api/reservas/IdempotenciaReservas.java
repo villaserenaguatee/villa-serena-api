@@ -53,8 +53,8 @@ public class IdempotenciaReservas {
         }
         return tx.execute(status -> {
             jdbc.queryForList("SELECT pg_advisory_xact_lock(hashtextextended(?,0))", alcance + ":" + clave);
-            var rows = jdbc.queryForList("SELECT huella,respuesta::text AS respuesta,verificacion_id "
-                    + "FROM reservas_solicitudes WHERE alcance=? AND clave=?", alcance, clave);
+            var rows = jdbc.queryForList("SELECT fingerprint AS huella,response::text AS respuesta,verification_id AS verificacion_id "
+                    + "FROM reservation_requests WHERE scope=? AND key=?", alcance, clave);
             if (!rows.isEmpty()) {
                 var fila = rows.getFirst();
                 // Los intentos históricos conservan el replay previo; no habilitan la nueva consulta.
@@ -69,7 +69,7 @@ public class IdempotenciaReservas {
             }
             UUID prueba = correo == null ? null : verificacion.consumir(correo, draft, receipt);
             T resultado = crear.get();
-            jdbc.update("INSERT INTO reservas_solicitudes(alcance,clave,huella,respuesta,verificacion_id) "
+            jdbc.update("INSERT INTO reservation_requests(scope,key,fingerprint,response,verification_id) "
                     + "VALUES(?,?,?,?::jsonb,?)", alcance, clave, huella, json.writeValueAsString(resultado), prueba);
             return resultado;
         });
@@ -83,8 +83,8 @@ public class IdempotenciaReservas {
                     "SELECT pg_try_advisory_xact_lock(hashtextextended(?,0))", Boolean.class, alcance + ":" + clave));
             if (!libre) throw ApiException.conflicto("SOLICITUD_EN_PROCESO",
                     "La creación sigue en proceso. Conserva el identificador y consulta de nuevo.");
-            var rows = jdbc.queryForList("SELECT respuesta->>'codigo' AS codigo,verificacion_id "
-                    + "FROM reservas_solicitudes WHERE alcance=? AND clave=?", alcance, clave);
+            var rows = jdbc.queryForList("SELECT response->>'codigo' AS codigo,verification_id AS verificacion_id "
+                    + "FROM reservation_requests WHERE scope=? AND key=?", alcance, clave);
             if (rows.isEmpty() || !verificacion.autorizaRecuperacion(
                     (UUID) rows.getFirst().get("verificacion_id"), draft, receipt)) {
                 throw ApiException.noEncontrado();

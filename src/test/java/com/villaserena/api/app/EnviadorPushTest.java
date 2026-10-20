@@ -71,13 +71,13 @@ class EnviadorPushTest {
     @BeforeEach
     void prepararReserva() {
         recepcionista = jdbc.queryForObject(
-                "SELECT id FROM empleados WHERE correo = 'ana.perez@villaserena.test'", Long.class);
+                "SELECT id  FROM employees WHERE email = 'ana.perez@villaserena.test'", Long.class);
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Ana Push', 'push.ana@correo.test', '+502 5555 9999', 'Guatemalteca', 'DPI', '4444444444444')
                 RETURNING id""", Long.class);
-        long habitacion = jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = '202'", Long.class);
-        long tipo = jdbc.queryForObject("SELECT tipo_habitacion_id FROM habitaciones WHERE id = ?", Long.class,
+        long habitacion = jdbc.queryForObject("SELECT id  FROM rooms WHERE number = '202'", Long.class);
+        long tipo = jdbc.queryForObject("SELECT room_type_id AS \"tipo_habitacion_id\" FROM rooms WHERE id = ?", Long.class,
                 habitacion);
         Reserva reserva = reservaService.crear(SolicitudReserva.recepcion(huespedId, tipo,
                 LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-08"), 1, habitacion, recepcionista));
@@ -115,7 +115,7 @@ class EnviadorPushTest {
         assertThat(aviso.getIntentos()).isEqualTo(1);
         assertThat(aviso.getUltimoError()).isNotNull();
         // La reserva no se ve afectada por el fallo del envío.
-        assertThat(jdbc.queryForObject("SELECT estado FROM reservas WHERE codigo = ?", String.class, codigo))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE code = ?", String.class, codigo))
                 .isEqualTo("EN_ESTADIA");
     }
 
@@ -123,7 +123,7 @@ class EnviadorPushTest {
     void elPayloadNoLlevaDatosPersonalesNiMontos() {
         long avisoId = encolarPush();
 
-        String payload = jdbc.queryForObject("SELECT payload::text FROM outbox WHERE id = ?", String.class, avisoId);
+        String payload = jdbc.queryForObject("SELECT payload::text  FROM outbox WHERE id = ?", String.class, avisoId);
         assertThat(payload).contains(codigo).contains("pedidos")
                 .doesNotContain("Ana Push").doesNotContain("push.ana@correo.test");
     }

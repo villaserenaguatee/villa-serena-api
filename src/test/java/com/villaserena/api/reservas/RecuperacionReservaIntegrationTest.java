@@ -60,8 +60,8 @@ class RecuperacionReservaIntegrationTest {
         var body = peticion(oferta);
         Intento intento = intento(body);
         String codigo = codigo(crear(oferta, body, intento));
-        int cantidad = jdbc.queryForObject("SELECT count(*) FROM reservas", Integer.class);
-        jdbc.update("UPDATE reservas SET estado='CONFIRMADA' WHERE codigo=?", codigo);
+        int cantidad = jdbc.queryForObject("SELECT count(*)  FROM reservations", Integer.class);
+        jdbc.update("UPDATE reservations SET status='CONFIRMADA' WHERE code=?", codigo);
         entityManager.clear();
         consultar(oferta, intento).andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", containsString("no-store")))
@@ -69,7 +69,7 @@ class RecuperacionReservaIntegrationTest {
                 .andExpect(jsonPath("$.estadoReserva").value("CONFIRMADA"))
                 .andExpect(jsonPath("$.huesped").doesNotExist())
                 .andExpect(jsonPath("$.total").doesNotExist());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM reservas", Integer.class)).isEqualTo(cantidad);
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM reservations", Integer.class)).isEqualTo(cantidad);
         assertThat(codigo(crear(oferta, body, intento))).isEqualTo(codigo);
     }
 
@@ -87,7 +87,7 @@ class RecuperacionReservaIntegrationTest {
         consultar(true, original).andExpect(status().isNotFound());
         body.put("huesped", Map.of("correo", "otro@correo.test"));
         Intento otroCorreo = intento(body);
-        jdbc.update("UPDATE reserva_correo_verificaciones SET borrador=? WHERE comprobante_hash="
+        jdbc.update("UPDATE reservation_email_verifications SET draft=? WHERE proof_hash="
                 + "encode(sha256(convert_to(?, 'UTF8')), 'hex')", original.borrador(), otroCorreo.comprobante());
         consultar(false, new Intento(original.clave(), original.borrador(), otroCorreo.comprobante()))
                 .andExpect(status().isNotFound());
@@ -98,11 +98,11 @@ class RecuperacionReservaIntegrationTest {
         var body = peticion(false);
         Intento original = intento(body);
         String codigo = codigo(crear(false, body, original));
-        jdbc.update("UPDATE reserva_correo_verificaciones SET comprobante_expira_en=? WHERE borrador=?",
+        jdbc.update("UPDATE reservation_email_verifications SET proof_expires_at=? WHERE draft=?",
                 Timestamp.from(RelojFijoConfig.AHORA), original.borrador());
         consultar(false, original).andExpect(status().isNotFound());
         Intento renovado = intento(body);
-        jdbc.update("UPDATE reserva_correo_verificaciones SET borrador=? WHERE borrador=?",
+        jdbc.update("UPDATE reservation_email_verifications SET draft=? WHERE draft=?",
                 original.borrador(), renovado.borrador());
         consultar(false, new Intento(original.clave(), original.borrador(), renovado.comprobante()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.codigo").value(codigo));
@@ -111,10 +111,10 @@ class RecuperacionReservaIntegrationTest {
     @Test
     void intentoInexistenteNoCreaReservaNiConsumeComprobante() throws Exception {
         Intento intento = intento(peticion(false));
-        int cantidad = jdbc.queryForObject("SELECT count(*) FROM reservas", Integer.class);
+        int cantidad = jdbc.queryForObject("SELECT count(*)  FROM reservations", Integer.class);
         consultar(false, intento).andExpect(status().isNotFound());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM reservas", Integer.class)).isEqualTo(cantidad);
-        assertThat(jdbc.queryForObject("SELECT consumido_en FROM reserva_correo_verificaciones WHERE borrador=?",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM reservations", Integer.class)).isEqualTo(cantidad);
+        assertThat(jdbc.queryForObject("SELECT consumed_at AS \"consumido_en\" FROM reservation_email_verifications WHERE draft=?",
                 Timestamp.class, intento.borrador())).isNull();
     }
 
@@ -123,7 +123,7 @@ class RecuperacionReservaIntegrationTest {
         var body = peticion(false);
         Intento intento = intento(body);
         String codigo = codigo(crear(false, body, intento));
-        jdbc.update("UPDATE reservas_solicitudes SET verificacion_id=NULL WHERE clave=?", intento.clave());
+        jdbc.update("UPDATE reservation_requests SET verification_id=NULL WHERE key=?", intento.clave());
         consultar(false, intento).andExpect(status().isNotFound());
         assertThat(codigo(crear(false, body, intento))).isEqualTo(codigo);
     }
@@ -155,8 +155,8 @@ class RecuperacionReservaIntegrationTest {
     }
 
     private Map<String, Object> peticion(boolean oferta) {
-        Long tipo = jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = 'Estándar Jardín'", Long.class);
-        if (oferta) tipo = jdbc.queryForObject("SELECT tipo_habitacion_id FROM catalogo_ofertas WHERE slug = ?",
+        Long tipo = jdbc.queryForObject("SELECT id  FROM room_types WHERE name = 'Estándar Jardín'", Long.class);
+        if (oferta) tipo = jdbc.queryForObject("SELECT room_type_id AS \"tipo_habitacion_id\" FROM catalog_offers WHERE slug = ?",
                 Long.class, slug());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("tipoHabitacionId", tipo);
@@ -169,7 +169,7 @@ class RecuperacionReservaIntegrationTest {
     }
 
     private String slug() {
-        return jdbc.queryForObject("SELECT slug FROM catalogo_ofertas ORDER BY orden LIMIT 1", String.class);
+        return jdbc.queryForObject("SELECT slug  FROM catalog_offers ORDER BY sort_order LIMIT 1", String.class);
     }
 
     private ResultActions crear(boolean oferta, Map<String, Object> body, Intento intento) throws Exception {
@@ -196,8 +196,8 @@ class RecuperacionReservaIntegrationTest {
         new java.security.SecureRandom().nextBytes(azar);
         String comprobante = Base64.getUrlEncoder().withoutPadding().encodeToString(azar);
         jdbc.update("""
-                INSERT INTO reserva_correo_verificaciones (id, correo, borrador, codigo_hash, creado_en, expira_en,
-                    verificado_en, comprobante_hash, comprobante_expira_en)
+                INSERT INTO reservation_email_verifications (id, email, draft, code_hash, created_at, expires_at,
+                    verified_at, proof_hash, proof_expires_at)
                 VALUES (?, ?, ?, 'NO_APLICA', ?, ?, ?, encode(sha256(convert_to(?, 'UTF8')), 'hex'), ?)
                 """, UUID.randomUUID(), ((Map<?, ?>) body.get("huesped")).get("correo"), borrador,
                 Timestamp.from(RelojFijoConfig.AHORA), Timestamp.from(RelojFijoConfig.AHORA.plusSeconds(600)),
