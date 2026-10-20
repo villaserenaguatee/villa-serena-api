@@ -1,3 +1,7 @@
 spring:
   config:
     import: optional:file:.env.dev[.properties]
+villaserena:
+  archivos:
+    region: ${STORAGE_REGION:auto}
+    estilo-ruta: ${STORAGE_PATH_STYLE:true}

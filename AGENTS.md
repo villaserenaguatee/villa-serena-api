@@ -20,7 +20,7 @@ y diferencias respecto al plugin personal.
 Villa Serena es un PMS para un hotel boutique ficticio, desarrollado como proyecto final del curso de Desarrollo Web.
 
 - **Hito:** sábado 10 de octubre de 2026. El flujo demostrable es reservar → check-in → estadía desde la app → operación → check-out con factura.
-- **Entorno del hito:** PostgreSQL, Mailpit, MinIO, Prometheus y Grafana corren en Docker; el API, la web y la app corren en las computadoras del equipo.
+- **Entorno del hito:** PostgreSQL, Mailpit, Prometheus y Grafana son servicios locales. El API puede ejecutarse con Maven o Docker; `dev` usa R2 remoto y `prod` S3. Ver `docs/ENTORNOS.md`.
 - **Demostración:** huéspedes ficticios, Stripe en modo prueba y facturas sin validez ante la SAT.
 - **Después del hito:** despliegue en VPS, Cloudflare para producción, CI/CD de despliegue y backups. Los workflows de colaboración en GitHub y un Cloudflare Tunnel temporal para pruebas entre integrantes pueden usarse durante el desarrollo.
 
@@ -115,7 +115,7 @@ Las protecciones de seguridad siguen siendo obligatorias: nunca se publican secr
 
 ### villa-serena-infra
 
-El entorno local contiene `docker-compose.dev.yml`, PostgreSQL 17, Mailpit, MinIO, Prometheus y Grafana, junto con su configuración y `.env.example`. Para el hito, API, web y app se ejecutan fuera de Docker.
+El Compose auxiliar de infra contiene PostgreSQL 17, Mailpit, Prometheus y Grafana. El arranque recomendado del API vive en sus propios Compose `local`/`dev`; R2 y S3 se preparan en infra. No se utiliza MinIO.
 
 Comando de arranque: `docker compose -f docker-compose.dev.yml up -d`.
 
@@ -135,7 +135,7 @@ diferencias registradas. Pasarla no acredita DTO, validaciones ni permisos, que
 requieren sus pruebas de integración. No se cambian reglas ni se omiten rutas para
 simular conformidad.
 
-Comando de arranque local: `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`, cuando el perfil esté configurado. Flyway aplica el esquema y los datos iniciales.
+Comando de arranque local: `./mvnw spring-boot:run -Dspring-boot.run.profiles=local`. Flyway aplica solo el esquema; los fixtures se cargan manualmente después del arranque.
 
 Para verificar el API desde las computadoras del equipo de frontend, el agente puede ofrecer un **Cloudflare Tunnel temporal**. Su uso se acuerda con la persona, mantiene la autenticación y limita la exposición a los servicios necesarios. La URL y las condiciones de acceso se comparten por el canal del equipo; no se publican credenciales en issues. El túnel se cierra al terminar las pruebas y no equivale a un despliegue de producción.
 

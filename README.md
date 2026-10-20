@@ -4,7 +4,7 @@ API de Villa Serena (Spring Boot 4.1, Java 21, PostgreSQL 17 + Flyway). Ver `AGE
 
 ## Entornos y arranque
 
-Tres perfiles: **local** (API + PostgreSQL), **dev** (todas las integraciones locales) y **prod** (despliegue con infraestructura de producción). `local` es el predeterminado con Maven; `test` se reserva para pruebas. `demo` se retira.
+Tres perfiles: **local** (API + PostgreSQL), **dev** (servicios locales y R2 remoto) y **prod** (despliegue con S3 e infraestructura de producción). `local` es el predeterminado con Maven; `test` se reserva para pruebas. `demo` se retira.
 
 La [guía paso a paso de entornos](docs/ENTORNOS.md) contiene las variables mínimas, comandos de Docker/Maven, producción y bootstrap del primer administrador. Empieza por esa guía.
 

@@ -73,7 +73,7 @@ class MigracionesDemoTests {
     com.villaserena.api.archivos.AlmacenArchivos archivos;
 
     @Test
-    void archivosLocalesFuncionanSinMinioYLasAusenciasNoLoConsultan() {
+    void archivosLocalesFuncionanSinDependenciasRemotas() {
         assertThat(archivos).isInstanceOf(com.villaserena.api.piso.ArchivosLocales.class);
         byte[] pdf = "%PDF-1.4 documento local".getBytes(java.nio.charset.StandardCharsets.UTF_8);
         archivos.guardarPrivado("prueba-local.pdf", pdf, "application/pdf");

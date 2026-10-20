@@ -39,12 +39,12 @@ public record PropiedadesVillaSerena(
     }
 
     /**
-     * Archivos en MinIO (API S3). {@code urlPublica}: base del bucket público (fotos del
+     * Archivos en R2 (desarrollo) o S3 (producción). {@code urlPublica}: base del bucket público (fotos del
      * hotel, tipos y menú). El bucket privado guarda las fotos de incidencias, que se
      * entregan con una URL firmada de {@code minutosUrlFirmada}.
      */
-    public record Archivos(String urlPublica, String endpoint, String endpointPublico, String usuario, String contrasena,
-            String bucketPrivado, int minutosUrlFirmada) {
+    public record Archivos(String urlPublica, String endpoint, String region, String usuario, String contrasena,
+            String bucketPrivado, int minutosUrlFirmada, boolean estiloRuta) {
     }
 
     /**

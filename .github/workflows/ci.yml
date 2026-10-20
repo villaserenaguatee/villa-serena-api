@@ -45,7 +45,6 @@ jobs:
         env:
           DB_PASSWORD: ci-configuration-only
           JWT_SECRET: ci-configuration-only
-          MINIO_ROOT_PASSWORD: ci-configuration-only
           GRAFANA_ADMIN_PASSWORD: ci-configuration-only
           SPRING_DATASOURCE_PASSWORD: ci-configuration-only
           WEB_URL: https://hotel.example
