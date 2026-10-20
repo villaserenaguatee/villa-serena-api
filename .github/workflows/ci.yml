@@ -52,9 +52,12 @@ jobs:
           CORS_ORIGENES: https://hotel.example
           IMAGE_URI: ghcr.io/example/api:ci
         run: |
-          docker compose --env-file .env.local.example -f compose.local.yml config --no-env-resolution --quiet
-          docker compose --env-file .env.dev.example -f compose.dev.yml config --no-env-resolution --quiet
-          docker compose --env-file .env.prod.example -f compose.prod.yml config --no-env-resolution --quiet
+          cp .env.local.example .env.local
+          cp .env.dev.example .env.dev
+          cp .env.prod.example .env.prod
+          docker compose --env-file .env.local -f compose.local.yml config --quiet
+          docker compose --env-file .env.dev -f compose.dev.yml config --quiet
+          docker compose --env-file .env.prod -f compose.prod.yml config --quiet
       - name: Maven verify
         run: |
           chmod +x mvnw
