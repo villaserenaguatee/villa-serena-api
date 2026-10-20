@@ -28,6 +28,7 @@ import org.testcontainers.utility.MountableFile;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestPropertySource(properties = {
 		"spring.config.import=",
+        "villaserena.archivos.url-lectura=http://localhost:8080",
         "villaserena.primer-admin.habilitado=false",
 		"villaserena.primer-admin.correo=",
 		"villaserena.primer-admin.nombre=",
