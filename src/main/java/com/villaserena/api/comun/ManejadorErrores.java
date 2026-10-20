@@ -68,7 +68,10 @@ public class ManejadorErrores {
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
-    ResponseEntity<ErrorRespuesta> rutaInexistente(NoResourceFoundException e) {
+    ResponseEntity<ErrorRespuesta> rutaInexistente(NoResourceFoundException e,
+            jakarta.servlet.http.HttpServletRequest peticion) {
+        log.debug("Ruta no encontrada: {} {}", peticion.getMethod(),
+                peticion.getRequestURI().replace('\r', '_').replace('\n', '_'));
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorRespuesta.de("NO_ENCONTRADO", "No se encontró el recurso solicitado."));
     }

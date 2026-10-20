@@ -84,6 +84,12 @@ expuestas mediante rutas genéricas, nombres distintos y ampliaciones ya existen
 No confirman equivalencia de comportamiento. Cada ejecución adjunta las listas
 completas como artefactos de CI; no se silencian operaciones opcionales o pendientes.
 
+La reconciliación de empleados (#77) implementa las cinco operaciones canónicas
+de `/api/v1/admin/empleados`, con pruebas de DTO, validaciones, permisos y sesiones.
+El filtro de seguridad existente invalida inmediatamente el acceso al desactivar
+una cuenta; esa diferencia con RN-PER-014 se sigue en
+[#78](https://github.com/villaserenaguatee/villa-serena-api/issues/78).
+
 | Área | Reconciliación pendiente |
 |---|---|
 | Público y acceso | Ofertas, verificación de correo y sus encabezados, contacto, recuperación del personal y perfil del huésped. |

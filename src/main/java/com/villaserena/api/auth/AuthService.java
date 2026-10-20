@@ -77,14 +77,16 @@ public class AuthService {
         return sesion(empleado);
     }
 
-    /** Rota el refresh. El estado del empleado se revisa aquí, no en cada petición (VIS-04). */
+    /** Rota el refresh usando el mismo orden de bloqueos que la administración: empleado, luego token. */
     @Transactional(noRollbackFor = ApiException.class)
     public Tokens renovar(String refreshToken) {
+        var propietario = tokens.empleadoDelRefresh(refreshToken)
+                .map(id -> empleados.buscarParaActualizar(id).orElseThrow(TokenService::sesionVencida));
         RefreshToken anterior = tokens.consumirRefresh(refreshToken);
         if (anterior.getTipoUsuario() == TipoUsuario.HUESPED) {
             return tokens.emitirParaHuesped(anterior.getHuespedId());
         }
-        Empleado empleado = empleados.findById(anterior.getEmpleadoId())
+        Empleado empleado = propietario
                 .filter(Empleado::estaActivo)
                 .orElseThrow(TokenService::sesionVencida);
         return tokens.emitirParaEmpleado(empleado);
@@ -101,7 +103,7 @@ public class AuthService {
      */
     @Transactional
     public SesionEmpleado cambiarContrasena(long empleadoId, CambiarContrasenaPeticion peticion) {
-        Empleado empleado = empleados.findById(empleadoId).orElseThrow(TokenService::sesionVencida);
+        Empleado empleado = empleados.buscarParaActualizar(empleadoId).orElseThrow(TokenService::sesionVencida);
 
         if (!passwordEncoder.matches(peticion.contrasenaActual(), empleado.getContrasenaHash())) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "CONTRASENA_ACTUAL_INCORRECTA",

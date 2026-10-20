@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.HexFormat;
+import java.util.Optional;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -94,6 +95,10 @@ public class TokenService {
                 .orElseThrow(TokenService::sesionVencida);
         registro.setRevocadoEn(ahora);
         return registro;
+    }
+
+    Optional<Long> empleadoDelRefresh(String refreshToken) {
+        return refreshTokens.buscarEmpleado(hash(refreshToken), TipoUsuario.EMPLEADO);
     }
 
     /** Revoca un refresh si existe y pertenece al usuario; si no, no hace nada. */

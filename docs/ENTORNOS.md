@@ -173,6 +173,18 @@ El bootstrap no es un seed de Flyway. Es un alta operativa opcional después de 
 
 Si ya existe cualquier administrador, no se crea otro ni se modifica su contraseña aunque cambie el correo configurado. Un bloqueo transaccional de PostgreSQL serializa arranques simultáneos. No es una herramienta de recuperación de cuentas ni para crear administradores adicionales.
 
+Después de cambiar la contraseña inicial, Administración utiliza las cuentas reales del login:
+
+- `GET /api/v1/admin/empleados`: lista cuentas; admite filtros `rol` y `estado`.
+- `POST /api/v1/admin/empleados`: crea una cuenta activa y devuelve una contraseña temporal una sola vez.
+- `PATCH /api/v1/admin/empleados/{id}`: edita nombre, teléfono, rol y área; el correo permanece fijo.
+- `PATCH /api/v1/admin/empleados/{id}/estado`: activa o desactiva la cuenta.
+- `POST /api/v1/admin/empleados/{id}/restablecer-contrasena`: devuelve una nueva contraseña temporal y revoca los refresh anteriores.
+
+Todas requieren un JWT de `ADMIN` con contraseña definitiva. No puedes cambiar tu propio rol ni desactivar tu cuenta. Guarda y entrega la contraseña temporal de forma privada: no se envía por correo ni puede consultarse después. El empleado debe cambiarla al iniciar sesión. Estas operaciones no necesitan integraciones externas ni fixtures.
+
+En la web, `/api/admin/empleados` corresponde al BFF de Next.js, que llama a `/api/v1/admin/empleados` en Spring. Si pruebas directamente el API, incluye `/api/v1`. Para diagnosticar rutas inexistentes, configura `LOGGING_LEVEL_COM_VILLASERENA_API_COMUN=DEBUG` y reinicia el API: el log muestra método y ruta, sin query, cabeceras ni cuerpo.
+
 Si prefieres cargar fixtures en una instancia local vacía, deja el bootstrap apagado: el script manual rechaza tablas de negocio que ya contienen registros. Ver [carga local explícita](../README.md#carga-local-explícita). No ejecutes fixtures en producción.
 
 ## Parada y comprobaciones
