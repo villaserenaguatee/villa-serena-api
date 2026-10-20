@@ -24,10 +24,11 @@ import org.testcontainers.utility.MountableFile;
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
-@ActiveProfiles("demo")
+@ActiveProfiles("local")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestPropertySource(properties = {
 		"spring.config.import=",
+        "villaserena.primer-admin.habilitado=false",
 		"villaserena.primer-admin.correo=",
 		"villaserena.primer-admin.nombre=",
 		"villaserena.primer-admin.contrasena=",
@@ -67,6 +68,24 @@ class MigracionesDemoTests {
 		jdbc.execute("DROP FUNCTION reject_fixture()");
 		TestcontainersConfiguration.cargarDatosPrueba(postgres, entorno);
 	}
+
+    @Autowired
+    com.villaserena.api.archivos.AlmacenArchivos archivos;
+
+    @Test
+    void archivosLocalesFuncionanSinMinioYLasAusenciasNoLoConsultan() {
+        assertThat(archivos).isInstanceOf(com.villaserena.api.piso.ArchivosLocales.class);
+        byte[] pdf = "%PDF-1.4 documento local".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        archivos.guardarPrivado("prueba-local.pdf", pdf, "application/pdf");
+        assertThat(archivos.existePrivado("prueba-local.pdf")).isTrue();
+        assertThat(archivos.leerPrivado("prueba-local.pdf")).isEqualTo(pdf);
+        assertThat(archivos.urlFirmada("prueba-local.pdf")).startsWith("http://localhost:8080/api/archivos/lectura/");
+        assertThat(archivos.existePrivado("ausente.pdf")).isFalse();
+        assertThatThrownBy(() -> archivos.leerPrivado("ausente.pdf"))
+                .isInstanceOf(com.villaserena.api.comun.ApiException.class);
+        assertThatThrownBy(() -> archivos.urlFirmada("ausente.pdf"))
+                .isInstanceOf(com.villaserena.api.comun.ApiException.class);
+    }
 
 	@Test
 	void cargaLosDatosDePresentacion() {

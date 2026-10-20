@@ -41,6 +41,20 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Validate environment Compose files
+        env:
+          DB_PASSWORD: ci-configuration-only
+          JWT_SECRET: ci-configuration-only
+          MINIO_ROOT_PASSWORD: ci-configuration-only
+          GRAFANA_ADMIN_PASSWORD: ci-configuration-only
+          SPRING_DATASOURCE_PASSWORD: ci-configuration-only
+          WEB_URL: https://hotel.example
+          CORS_ORIGENES: https://hotel.example
+          IMAGE_URI: ghcr.io/example/api:ci
+        run: |
+          docker compose --env-file .env.local.example -f compose.local.yml config --no-env-resolution --quiet
+          docker compose --env-file .env.dev.example -f compose.dev.yml config --no-env-resolution --quiet
+          docker compose --env-file .env.prod.example -f compose.prod.yml config --no-env-resolution --quiet
       - name: Maven verify
         run: |
           chmod +x mvnw

@@ -19,9 +19,9 @@ out = subprocess.check_output(
      "--recursive", "--with-decryption", "--region", region,
      "--output", "json"], text=True)
 entries = json.loads(out)["Parameters"]
-required = {"SPRING_DATASOURCE_PASSWORD", "JWT_SECRET"}
+required = {"SPRING_DATASOURCE_PASSWORD", "JWT_SECRET", "WEB_URL", "CORS_ORIGENES"}
 values = {p["Name"].rsplit("/", 1)[-1]: p["Value"] for p in entries}
-missing = required - values.keys()
+missing = {key for key in required if not values.get(key)}
 if missing:
     raise SystemExit("Missing required application SSM parameters: " + ", ".join(sorted(missing)))
 # Docker env_file supports quoted strings; reject newlines and controls.
@@ -43,8 +43,8 @@ PY
 # Public GHCR image: EC2 pulls without registry credentials.
 cd "$deploy_dir"
 # Compose file is installed by the SSM command as a separate payload.
-IMAGE_URI="$IMAGE_URI" docker compose -p villa-serena-api -f compose.yml pull api
-IMAGE_URI="$IMAGE_URI" docker compose -p villa-serena-api -f compose.yml up -d --no-deps api
+API_ENV_FILE=.env IMAGE_URI="$IMAGE_URI" docker compose -p villa-serena-api -f compose.yml pull api
+API_ENV_FILE=.env IMAGE_URI="$IMAGE_URI" docker compose -p villa-serena-api -f compose.yml up -d --no-deps api
 # Check via local EC2 port (the path may be protected; 401/403 indicates
 # server is responding but isn't sufficient to prove application readiness).
 for i in $(seq 1 30); do

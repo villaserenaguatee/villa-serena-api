@@ -2,6 +2,12 @@
 
 API de Villa Serena (Spring Boot 4.1, Java 21, PostgreSQL 17 + Flyway). Ver `AGENTS.md` y la documentación en `villa-serena-docs`.
 
+## Entornos y arranque
+
+Tres perfiles: **local** (API + PostgreSQL), **dev** (todas las integraciones locales) y **prod** (despliegue con infraestructura de producción). `local` es el predeterminado con Maven; `test` se reserva para pruebas. `demo` se retira.
+
+La [guía paso a paso de entornos](docs/ENTORNOS.md) contiene las variables mínimas, comandos de Docker/Maven, producción y bootstrap del primer administrador. Empieza por esa guía.
+
 ## Contrato y verificación
 
 El único contrato canónico está en [villa-serena-docs](https://github.com/villaserenaguatee/villa-serena-docs/blob/main/openapi.yaml).
@@ -19,16 +25,16 @@ herramientas, DTO y permisos sí son obligatorias en CI.
 
 Flyway versiona **solo el esquema**, en `src/main/resources/db/migration`, con nombres y comentarios SQL en inglés. Todos los perfiles usan esa misma carpeta. Los valores de negocio (`CONFIRMADA`, `RECEPCION`, etc.) conservan su representación actual. JDBC y JPA mapean el esquema en inglés a los DTO y atributos Java existentes.
 
-Ningún perfil carga seeds al arrancar. El perfil `demo` solo habilita los adaptadores de archivos locales. Los datos ficticios están en `scripts/demo/load-data.sql`, fuera de los recursos de la aplicación y del JAR. Las reservas ficticias automáticas existen únicamente en el código de pruebas. El alta opcional del primer administrador sigue siendo una configuración explícita mediante `ADMIN_EMAIL`, `ADMIN_NAME` y `ADMIN_PASSWORD`; déjalas vacías si deseas un arranque sin registros.
+Ningún perfil carga seeds al arrancar. El perfil `local` habilita los adaptadores de archivos locales. Los datos ficticios están en `scripts/demo/load-data.sql`, fuera de los recursos de la aplicación y del JAR. Las reservas ficticias automáticas existen únicamente en el código de pruebas. El alta opcional del primer administrador sigue siendo una configuración explícita mediante `BOOTSTRAP_ADMIN_ENABLED=true`, `ADMIN_EMAIL`, `ADMIN_NAME` y `ADMIN_PASSWORD`; está deshabilitada por defecto. Ver el [checklist de bootstrap](docs/ENTORNOS.md#bootstrap-primer-administrador).
 
 ### Carga local explícita
 
 1. Arranca el API y espera a que Flyway termine y `/actuator/health` responda correctamente.
-2. Exporta `DEMO_PASSWORD_HASH`, `CANAL1_KEY_HASH` y `CANAL2_KEY_HASH` en tu terminal con valores privados válidos, según `.env.example`. El script los lee del entorno de `psql`; no se envían al API. No ejecutes `.env` con `source`: Spring lo interpreta como propiedades.
+2. Exporta `DEMO_PASSWORD_HASH`, `CANAL1_KEY_HASH` y `CANAL2_KEY_HASH` en tu terminal con valores privados válidos: un hash BCrypt de la contraseña local y dos hashes SHA-256 hexadecimales de 64 caracteres para las claves de canal. El script los lee del entorno de `psql`; no se envían al API. No ejecutes `.env` con `source`: Spring lo interpreta como propiedades.
 3. Ejecuta la carga contra un contenedor **local y con las tablas de negocio vacías**. Ajusta el nombre, usuario y nombre de la instancia a tu entorno:
 
 ```bash
-DEMO_CONTAINER=villa-serena-dev-postgres-1
+DEMO_CONTAINER=villa-serena-local-postgres-1
 docker exec -i \
   -e DEMO_PASSWORD_HASH -e CANAL1_KEY_HASH -e CANAL2_KEY_HASH \
   "$DEMO_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U villaserena -d villaserena \
@@ -55,7 +61,7 @@ docker exec -i "$DEMO_CONTAINER" psql -X -U villaserena -d villaserena < scripts
 
 ## Pagos con Recurrente (issue #54, ADR-017)
 
-El API crea checkouts alojados en GTQ con tarjetas, por el total de la reserva o el saldo de la estadía. Configura `RECURRENTE_PUBLIC_KEY`, `RECURRENTE_SECRET_KEY` y `RECURRENTE_WEBHOOK_SECRET` en tu entorno local, según `.env.example`. La clave pública queda disponible para integraciones que la necesiten; el checkout del backend solo requiere la secreta. Para pruebas usa una cuenta Sandbox, sin dinero real.
+El API crea checkouts alojados en GTQ con tarjetas, por el total de la reserva o el saldo de la estadía. Configura `RECURRENTE_PUBLIC_KEY`, `RECURRENTE_SECRET_KEY` y `RECURRENTE_WEBHOOK_SECRET` en tu entorno local, según la guía de entornos. La clave pública queda disponible para integraciones que la necesiten; el checkout del backend solo requiere la secreta. Para pruebas usa una cuenta Sandbox, sin dinero real.
 
 Registra `POST /api/v1/pagos/recurrente/webhook` en el dashboard de Recurrente con una URL accesible por el proveedor. La verificación requiere el cuerpo original y los tres encabezados Svix: `svix-id`, `svix-timestamp`, `svix-signature`. El timestamp admite cinco minutos de diferencia. El mensaje se deduplica por `svix-id` y el pago se confirma consultando el checkout y conciliando su monto y moneda GTQ; la redirección al navegador no confirma el cobro.
 

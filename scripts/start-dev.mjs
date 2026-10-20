@@ -94,7 +94,7 @@ function waitForApiHealth(url = "http://localhost:8080/actuator/health", maxRetr
 }
 
 async function main() {
-  console.log(`\n${colors.bold}=== Despliegue de Demostración y Túnel Cloudflare ===${colors.reset}\n`);
+  console.log(`\n${colors.bold}=== Entorno dev y túnel público temporal de Cloudflare ===${colors.reset}\n`);
 
   // -------------------------------------------------------------
   // PASO 1: Validar compilación del backend con Maven
@@ -127,7 +127,7 @@ async function main() {
   // -------------------------------------------------------------
   // PASO 2: Levantar stack con Docker Compose
   // -------------------------------------------------------------
-  logInfo("Paso 2/3: Levantando PostgreSQL y API con Docker Compose...");
+  logInfo("Paso 2/3: Levantando API e integraciones de desarrollo con Docker Compose...");
 
   if (!commandExists("docker")) {
     logError("'docker' no está instalado o no se encuentra en el PATH.");
@@ -142,14 +142,14 @@ async function main() {
     process.exit(1);
   }
 
-  const composeFile = path.join(ROOT_DIR, "compose.demo.yml");
+  const composeFile = path.join(ROOT_DIR, "compose.dev.yml");
   if (!fs.existsSync(composeFile)) {
     logError(`No se encontró el archivo "${composeFile}".`);
     process.exit(1);
   }
 
   try {
-    await runCommand("docker", ["compose", "-f", "compose.demo.yml", "up", "-d", "--build"], ROOT_DIR);
+    await runCommand("docker", ["compose", "--env-file", ".env.dev", "-f", "compose.dev.yml", "up", "-d", "--build"], ROOT_DIR);
     logInfo("Esperando a que el API termine de arrancar y esté saludable (http://localhost:8080/actuator/health)...");
     await waitForApiHealth();
     logSuccess("API y base de datos listas y respondiendo en el puerto 8080.\n");
@@ -157,7 +157,7 @@ async function main() {
     logError(
       `Falló el arranque de Docker Compose o el API no estuvo lista a tiempo.\n` +
       `   Detalle: ${err.message}\n` +
-      `   Para ver los logs de error ejecuta: docker compose -f compose.demo.yml logs api`
+      `   Para ver los logs de error ejecuta: docker compose --env-file .env.dev -f compose.dev.yml logs api`
     );
     process.exit(1);
   }

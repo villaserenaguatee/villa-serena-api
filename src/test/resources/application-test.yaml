@@ -13,3 +13,5 @@ ADMIN_EMAIL: ""
 EXPO_PUSH_URL: http://localhost:1/push
 
 # TestcontainersConfiguration loads fixtures after Flyway, outside its history.
+
+villaserena.primer-admin.habilitado: false

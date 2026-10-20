@@ -7,7 +7,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.access.prepost.PreAuthorize;
 import com.villaserena.api.auth.UsuarioActual;
 import com.villaserena.api.comun.ApiException;
-@RestController @Profile("demo")
+@RestController @Profile("local")
 public class ArchivosLecturaController {
  private final ArchivosLocales archivos; private final JdbcTemplate jdbc;
  public ArchivosLecturaController(ArchivosLocales archivos, JdbcTemplate jdbc){this.archivos=archivos;this.jdbc=jdbc;}

@@ -12,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.TestComponent;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,7 +31,7 @@ import com.villaserena.api.reservas.SolicitudReserva;
 
 /**
  * Reservas de prueba para el Gantt, la búsqueda y la app (OBJ-2A). Solo con el perfil
- * "demo" en las pruebas y solo si la base no tiene reservas: crea 12
+ * importación explícita en las pruebas y solo si la base no tiene reservas: crea 12
  * reservas con fechas relativas a "hoy" (America/Guatemala), de los 4 canales y de
  * todos los estados, usando los servicios reales (cuenta, cargos e historial).
  * <p>
@@ -40,7 +39,6 @@ import com.villaserena.api.reservas.SolicitudReserva;
  * {@value #CORREO_APP}, para probar la app sin esperar el check-in. No envía correos.
  */
 @TestComponent
-@Profile("demo")
 public class ReservasDePrueba implements ApplicationRunner {
 
     /** Huésped en estadía para probar la app (acceso con código por Mailpit). */
@@ -135,7 +133,7 @@ public class ReservasDePrueba implements ApplicationRunner {
 
         // Los datos de prueba no envían correos de confirmación.
         jdbc.update("DELETE FROM outbox WHERE id > ?", ultimoAviso);
-        log.info("Reservas de prueba creadas: 12 (perfil demo). Huésped de la app: {}", CORREO_APP);
+        log.info("Reservas de prueba creadas: 12 (solo pruebas). Huésped de la app: {}", CORREO_APP);
     }
 
     private Reserva recepcion(long huesped, String tipo, LocalDate entrada, int noches, int personas,

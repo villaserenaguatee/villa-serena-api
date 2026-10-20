@@ -53,13 +53,28 @@ class AlmacenS3Test {
             s3.createBucket(b -> b.bucket(BUCKET));
         }
         almacen = new AlmacenS3(new PropiedadesVillaSerena(null, null, null, null, null, null, null, null,
-                new PropiedadesVillaSerena.Archivos(null, endpoint, USUARIO, CONTRASENA, BUCKET, 10), null));
+                new PropiedadesVillaSerena.Archivos(null, endpoint, endpoint, USUARIO, CONTRASENA, BUCKET, 10), null));
     }
 
     @AfterAll
     static void detenerMinio() {
         almacen.cerrar();
         minio.stop();
+    }
+
+    @Test
+    void firmaConElEndpointDelNavegadorSinCambiarElClienteInterno() {
+        var externo = new AlmacenS3(new PropiedadesVillaSerena(null, null, null, null, null, null, null, null,
+                new PropiedadesVillaSerena.Archivos(null, endpoint, "https://storage.example", USUARIO,
+                        CONTRASENA, BUCKET, 10), null));
+        try {
+            externo.guardarPrivado("endpoint-publico.pdf", new byte[]{1, 2, 3}, "application/pdf");
+            assertThat(externo.existePrivado("endpoint-publico.pdf")).isTrue();
+            assertThat(externo.urlFirmada("endpoint-publico.pdf"))
+                    .startsWith("https://storage.example/").contains("X-Amz-Signature");
+        } finally {
+            externo.cerrar();
+        }
     }
 
     @Test
