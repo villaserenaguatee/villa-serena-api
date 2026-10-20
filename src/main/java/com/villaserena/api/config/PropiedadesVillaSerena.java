@@ -27,7 +27,7 @@ public record PropiedadesVillaSerena(
     public record Login(int intentosMaximos, int bloqueoMinutos) {
     }
 
-    public record PrimerAdmin(String correo, String nombre, String contrasena) {
+    public record PrimerAdmin(boolean habilitado, String correo, String nombre, String contrasena) {
     }
 
     /** Plazo para pagar una reserva web antes de cancelarla (PAR-06). */
@@ -43,7 +43,7 @@ public record PropiedadesVillaSerena(
      * hotel, tipos y menú). El bucket privado guarda las fotos de incidencias, que se
      * entregan con una URL firmada de {@code minutosUrlFirmada}.
      */
-    public record Archivos(String urlPublica, String endpoint, String usuario, String contrasena,
+    public record Archivos(String urlPublica, String endpoint, String endpointPublico, String usuario, String contrasena,
             String bucketPrivado, int minutosUrlFirmada) {
     }
 

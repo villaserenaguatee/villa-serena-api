@@ -20,6 +20,10 @@ import org.springframework.test.context.TestPropertySource;
 @ActiveProfiles("prod")
 @TestPropertySource(properties = {
 		"spring.config.import=",
+        "villaserena.primer-admin.habilitado=false",
+        "WEB_URL=https://hotel.example", "CORS_ORIGENES=https://hotel.example",
+        "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost/unused",
+        "SPRING_DATASOURCE_USERNAME=test", "SPRING_DATASOURCE_PASSWORD=test",
 		"villaserena.primer-admin.correo=",
 		"villaserena.primer-admin.nombre=",
 		"villaserena.primer-admin.contrasena=",
@@ -31,6 +35,34 @@ class MigracionesSinDemoTests {
 
 	@Autowired
 	Environment entorno;
+
+    @Autowired
+    com.villaserena.api.auth.EmpleadoRepository empleados;
+    @Autowired
+    org.springframework.security.crypto.password.PasswordEncoder encoder;
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void bootstrapCreaSoloElPrimerAdminYNoReemplazaSusCredenciales() {
+        var datos = new com.villaserena.api.config.PropiedadesVillaSerena.PrimerAdmin(
+                true, "admin@example.com", "Admin inicial", "Clave-temporal-123");
+        var props = new com.villaserena.api.config.PropiedadesVillaSerena(
+                null, null, null, null, datos, null, null, null, null, null);
+        new com.villaserena.api.auth.PrimerAdministrador(empleados, encoder, props, jdbc).run(null);
+        empleados.flush();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM employees WHERE role='ADMIN'", Long.class)).isEqualTo(1);
+        String hash = jdbc.queryForObject("SELECT password_hash FROM employees", String.class);
+        assertThat(encoder.matches("Clave-temporal-123", hash)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT must_change_password FROM employees", Boolean.class)).isTrue();
+        var otro = new com.villaserena.api.config.PropiedadesVillaSerena.PrimerAdmin(
+                true, "otro@example.com", "Otro admin", "Otra-clave-temporal-123");
+        var otrasProps = new com.villaserena.api.config.PropiedadesVillaSerena(
+                null, null, null, null, otro, null, null, null, null, null);
+        new com.villaserena.api.auth.PrimerAdministrador(empleados, encoder, otrasProps, jdbc).run(null);
+        empleados.flush();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM employees", Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT password_hash FROM employees", String.class)).isEqualTo(hash);
+    }
 
 	@Test
 	void noAplicaElSeedDeDemostracion() {

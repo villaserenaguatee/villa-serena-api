@@ -7,10 +7,8 @@ spring:
       # claro); este tope solo corta subidas mucho mayores.
       max-file-size: 10MB
       max-request-size: 11MB
-  config:
-    # Lee el .env de la raíz del repositorio (fuera de Git) como archivo
-    # .properties. Si no existe, se usan las variables del entorno.
-    import: optional:file:.env[.properties]
+  profiles:
+    default: local
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/villaserena}
     username: ${DB_USER:villaserena}
@@ -26,7 +24,7 @@ spring:
         jdbc:
           time_zone: UTC
   mail:
-    # Mailpit del Docker local (villa-serena-infra): SMTP sin autenticación.
+    # Mailpit en dev: SMTP sin autenticación.
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
     username: ${MAIL_USER:}
@@ -73,6 +71,7 @@ villaserena:
     intentos-maximos: 5
     bloqueo-minutos: 15
   primer-admin:
+    habilitado: ${BOOTSTRAP_ADMIN_ENABLED:false}
     correo: ${ADMIN_EMAIL:}
     nombre: ${ADMIN_NAME:}
     contrasena: ${ADMIN_PASSWORD:}
@@ -87,8 +86,9 @@ villaserena:
     url-retorno-app: ${APP_URL_RETORNO:villaserena://pago-resultado}
   archivos:
     url-publica: ${ARCHIVOS_URL_PUBLICA:http://localhost:9000/villaserena-publico}
-    # MinIO del Docker local (villa-serena-infra), mismas variables que su .env.
+    # MinIO en dev; el perfil local utiliza su propio adaptador.
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    endpoint-publico: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT:http://localhost:9000}}
     usuario: ${MINIO_ROOT_USER:villaserena}
     contrasena: ${MINIO_ROOT_PASSWORD:}
     bucket-privado: ${MINIO_BUCKET_PRIVATE:villaserena-privado}

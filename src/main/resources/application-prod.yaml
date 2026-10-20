@@ -1,0 +1,21 @@
+# Production reads injected environment variables, never local dotenv files.
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+  mail:
+    port: ${MAIL_PORT:587}
+    properties:
+      mail.smtp:
+        auth: ${MAIL_AUTH:true}
+        starttls.enable: ${MAIL_STARTTLS:true}
+server:
+  shutdown: graceful
+springdoc:
+  api-docs.enabled: false
+  swagger-ui.enabled: false
+villaserena:
+  web-url: ${WEB_URL}
+  cors:
+    origenes: ${CORS_ORIGENES}

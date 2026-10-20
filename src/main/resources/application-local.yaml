@@ -1,0 +1,6 @@
+spring:
+  config:
+    import: optional:file:.env.local[.properties]
+villaserena:
+  archivos:
+    url-lectura: ${API_PUBLIC_URL:http://localhost:8080}

@@ -64,7 +64,7 @@ jobs:
           # avoid depending on any public SSH endpoint.
           python3 - <<'PY'
           import base64, json, os, subprocess
-          compose = base64.b64encode(open("compose.api.yml", "rb").read()).decode()
+          compose = base64.b64encode(open("compose.prod.yml", "rb").read()).decode()
           deploy = base64.b64encode(open("scripts/deploy-ec2.sh", "rb").read()).decode()
           # Paths and values come from trusted workflow configuration.
           cmds = [

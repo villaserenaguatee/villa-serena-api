@@ -26,7 +26,7 @@ import com.villaserena.api.reservas.pagos.PasarelaPagos;
  */
 @SpringBootTest
 @Import({TestcontainersConfiguration.class, RelojFijoConfig.class, ReservasDePrueba.class})
-@ActiveProfiles({"test", "demo"})
+@ActiveProfiles("test")
 class ReservasDePruebaTest {
 
     static final LocalDate HOY = LocalDate.of(2026, 10, 5);

@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # El API corre en la misma red de Compose.
+  - job_name: villa-serena-api
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["api:8080"]

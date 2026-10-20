@@ -84,7 +84,7 @@ public class AlmacenS3 implements AlmacenArchivos {
     private synchronized S3Presigner firmador() {
         if (firmador == null) {
             firmador = S3Presigner.builder()
-                    .endpointOverride(URI.create(config.endpoint()))
+                    .endpointOverride(URI.create(config.endpointPublico()))
                     .region(Region.US_EAST_1)
                     .credentialsProvider(credenciales())
                     .serviceConfiguration(rutas())
