@@ -4,11 +4,13 @@ Los únicos perfiles de ejecución son **local**, **dev** y **prod**. `test` es 
 
 | Perfil | Servicios | Archivos privados | Configuración |
 |---|---|---|---|
-| `local` | API + PostgreSQL | Adaptador local persistente, sin MinIO | `.env.local` |
-| `dev` | API + PostgreSQL + Mailpit + MinIO + Prometheus + Grafana | MinIO | `.env.dev` |
-| `prod` | API conectada a infraestructura provisionada | S3/MinIO configurado | Variables inyectadas; SSM en el despliegue existente |
+| `local` | API + PostgreSQL | Adaptador local persistente, sin almacenamiento remoto | `.env.local` |
+| `dev` | API + PostgreSQL + Mailpit + Prometheus + Grafana; R2 remoto | R2 remoto | `.env.dev` |
+| `prod` | API conectada a infraestructura provisionada | Amazon S3 | Variables inyectadas; SSM en el despliegue existente |
 
-`dev` sirve para desarrollar y demostrar las integraciones. No hace falta un cuarto perfil `staging`: actualmente no hay un despliegue de preproducción separado. El perfil antiguo `demo` se retira. Ningún entorno carga datos ficticios al arrancar. Flyway aplica solo el esquema.
+`dev` sirve para desarrollar y demostrar las integraciones. R2 se prueba directamente en Cloudflare desde tu computadora; no se ejecuta un emulador de objetos. Mailpit permanece. El aprovisionamiento y la comprobación remota se describen en la [guía R2/S3 de infra](https://github.com/villaserenaguatee/villa-serena-infra/blob/main/docs/ALMACENAMIENTO.md).
+
+No hace falta un cuarto perfil `staging`: actualmente no hay un despliegue de preproducción separado. El perfil antiguo `demo` se retira. Ningún entorno carga datos ficticios al arrancar. Flyway aplica solo el esquema.
 
 Ejecuta los comandos desde la raíz de **villa-serena-api**. Docker Compose administra los servicios; el perfil Spring configura el API. No necesitas levantar también el Compose antiguo de `infra`. Usa un solo stack local a la vez para evitar conflictos de puertos.
 
@@ -22,7 +24,10 @@ Ejecuta los comandos desde la raíz de **villa-serena-api**. Docker Compose admi
 | `DB_URL` | Maven: opcional, `jdbc:postgresql://localhost:5432/villaserena`; Compose lo configura | Igual | No se usa |
 | `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Alternativa estándar de Spring si se inyectan | Igual | Obligatorias; Compose/CD dan URL y usuario del servidor actual |
 | `WEB_URL`, `CORS_ORIGENES` | Opcionales; `http://localhost:3000` | Igual | Obligatorias; orígenes HTTPS, separados por comas en CORS |
-| `MINIO_ROOT_PASSWORD`, `GRAFANA_ADMIN_PASSWORD` | No se necesitan | Obligatorias para el stack completo | Configurar almacenamiento al usar esa función; Grafana se administra aparte |
+| `GRAFANA_ADMIN_PASSWORD` | No se necesita | Obligatoria para el stack completo | Grafana se administra aparte |
+| `STORAGE_ENDPOINT`, `STORAGE_REGION` | No se necesitan | Endpoint HTTPS de R2 y región `auto` | Endpoint vacío; región S3, normalmente `us-east-1` |
+| `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` | No se necesitan | Credenciales R2 acotadas al bucket privado | Se omiten: rol EC2 y credenciales temporales |
+| `STORAGE_BUCKET_PRIVATE`, `ARCHIVOS_URL_PUBLICA` | No se necesitan para archivos privados locales | Bucket privado R2 y dominio público de assets | Bucket privado S3 y URL pública CloudFront |
 | `BOOTSTRAP_ADMIN_ENABLED` | Opcional; `false` | Opcional; `false` | Opcional; `false` |
 | `ADMIN_EMAIL`, `ADMIN_NAME`, `ADMIN_PASSWORD` | Solo al habilitar bootstrap | Igual | Igual |
 
@@ -55,7 +60,7 @@ docker compose --env-file .env.local -f compose.local.yml logs --tail=100 api
 
 Un API saludable puede tener todas las tablas de negocio vacías: el hotel y sus catálogos se configuran después del arranque.
 
-Los archivos privados se guardan mediante el adaptador local en PostgreSQL; no se abre ninguna conexión a MinIO. Las URLs de descarga apuntan a `API_PUBLIC_URL` (por defecto `http://localhost:8080`). El correo no está disponible en este modo: las operaciones que envíen correo necesitan un SMTP; el outbox reintenta los envíos fallidos. Tampoco se simulan pagos ni push externos.
+Los archivos privados se guardan mediante el adaptador local en PostgreSQL; no se abre ninguna conexión a un bucket remoto. Las URLs de descarga apuntan a `API_PUBLIC_URL` (por defecto `http://localhost:8080`). El correo no está disponible en este modo: las operaciones que envíen correo necesitan un SMTP; el outbox reintenta los envíos fallidos. Tampoco se simulan pagos ni push externos.
 
 ### API con Maven, PostgreSQL en Docker
 
@@ -81,7 +86,9 @@ Si cambias `DB_NAME`, `DB_USER` o `POSTGRES_PORT`, ajusta también `DB_URL` para
 cp .env.dev.example .env.dev
 ```
 
-- [ ] Completa `DB_PASSWORD`, `JWT_SECRET`, `MINIO_ROOT_PASSWORD` (mínimo 8 caracteres) y `GRAFANA_ADMIN_PASSWORD`. Las credenciales de Recurrente son opcionales y de Sandbox.
+- [ ] Completa `DB_PASSWORD`, `JWT_SECRET` y `GRAFANA_ADMIN_PASSWORD`.
+- [ ] Para probar archivos, provisiona R2 según la guía de infra y completa `STORAGE_ENDPOINT`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY`, `STORAGE_BUCKET_PRIVATE` y `ARCHIVOS_URL_PUBLICA`. La región es `auto` y `STORAGE_PATH_STYLE=true`. No se crean buckets desde el arranque del API.
+- [ ] Las credenciales de Recurrente son opcionales y de Sandbox. Sin configurar R2 el API puede arrancar, pero las operaciones de archivos fallarán hasta configurarlo.
 - [ ] Arranca y comprueba:
 
 ```bash
@@ -90,17 +97,25 @@ curl --fail http://localhost:8080/actuator/health
 docker compose --env-file .env.dev -f compose.dev.yml ps -a
 ```
 
-- [ ] Confirma que `minio-init` terminó con código **0**. Solo crea buckets y políticas de almacenamiento, no registros de negocio.
+- [ ] Si vas a probar archivos, ejecuta la comprobación remota explícita de la sección siguiente. Un API `UP` no certifica conectividad con R2.
 
 | Servicio | Dirección |
 |---|---|
 | API / Swagger | `http://localhost:8080` / `/swagger-ui/index.html` |
 | Mailpit | `http://localhost:8025` (SMTP: `localhost:1025`) |
-| MinIO | `http://localhost:9001` (API S3: `localhost:9000`) |
+| R2 | Endpoint y dominio remoto obtenidos desde Terraform |
 | Prometheus | `http://localhost:9090` |
 | Grafana | `http://localhost:3001` |
 
-`MINIO_ENDPOINT` es el endpoint usado por el servidor: Compose lo cambia a `http://minio:9000`. `MINIO_PUBLIC_ENDPOINT` es el endpoint visible para el navegador, por defecto `http://localhost:9000`; las URLs firmadas se generan con este último.
+`STORAGE_ENDPOINT` es el endpoint S3 de tu cuenta R2, también usado para firmar enlaces privados. `ARCHIVOS_URL_PUBLICA` es el dominio del bucket público: no sirve para firmar URLs privadas. El navegador debe poder acceder a ambos. Las credenciales permanecen exclusivamente en el backend.
+
+Para comprobar R2 con el SDK real (requiere los valores válidos en `.env.dev`):
+
+```bash
+STORAGE_SMOKE_TEST=true ./mvnw -B -Dtest=AlmacenS3RemoteTest test
+```
+
+En PowerShell, establece `$env:STORAGE_SMOKE_TEST='true'`, ejecuta Maven y elimina esa variable al terminar. La prueba lee `.env.dev` como propiedades, escribe un objeto único bajo `_checks/`, verifica lectura y descarga firmada, comprueba que la descarga anónima esté bloqueada y elimina el objeto. No carga datos SQL ni necesita arrancar el API. La prueba falla si no puede limpiar; con versionado S3, la eliminación deja una versión anterior protegida y un marcador de borrado.
 
 ### API con Maven, integraciones en Docker
 
@@ -108,7 +123,7 @@ docker compose --env-file .env.dev -f compose.dev.yml ps -a
 - [ ] Arranca solo las dependencias y luego el API:
 
 ```bash
-PROMETHEUS_CONFIG=./docker/prometheus-host.yml docker compose --env-file .env.dev -f compose.dev.yml up -d postgres mailpit minio minio-init prometheus grafana
+PROMETHEUS_CONFIG=./docker/prometheus-host.yml docker compose --env-file .env.dev -f compose.dev.yml up -d postgres mailpit prometheus grafana
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
@@ -121,7 +136,8 @@ Este cambio conserva el despliegue actual en EC2: `infra` provisiona PostgreSQL 
 - [ ] Prepara la infraestructura de producción según la documentación de `infra` y verifica la conectividad desde la red del API.
 - [ ] Publica una imagen verificada en GHCR con la arquitectura del servidor (el despliegue actual usa ARM64).
 - [ ] Configura en SSM, bajo `/villa-serena/prod/api/`, al menos `SPRING_DATASOURCE_PASSWORD`, `JWT_SECRET`, `WEB_URL` y `CORS_ORIGENES`. El Compose proporciona la URL y el usuario actuales; si cambian, configura también `SPRING_DATASOURCE_URL` y `SPRING_DATASOURCE_USERNAME`.
-- [ ] Configura SMTP, almacenamiento y Recurrente cuando vayas a usar esas funciones. `WEB_URL` y los orígenes CORS deben ser HTTPS; no se aceptan comodines ni rutas. No copies credenciales locales a producción.
+- [ ] Aplica `aws/storage` de infra después de provisionar el rol EC2. Copia sus salidas `private_bucket`, `storage_region` y `public_assets_url` a SSM como `STORAGE_BUCKET_PRIVATE`, `STORAGE_REGION` y `ARCHIVOS_URL_PUBLICA`. Deja `STORAGE_ENDPOINT` vacío y omite `STORAGE_ACCESS_KEY_ID` y `STORAGE_SECRET_ACCESS_KEY`: el SDK usa credenciales temporales del rol EC2. Configura `APP_DOWNLOAD_URL` si publicas el APK.
+- [ ] Configura SMTP y Recurrente cuando vayas a usar esas funciones. `WEB_URL` y los orígenes CORS deben ser HTTPS; no se aceptan comodines ni rutas. No copies credenciales locales a producción.
 - [ ] Mantén `BOOTSTRAP_ADMIN_ENABLED=false`, o configura el alta inicial explícita de la siguiente sección.
 - [ ] Ejecuta el flujo CD existente. Ahora publica `compose.prod.yml`; el script obtiene secretos de SSM y comprueba `/actuator/health`. Spring no importa `.env.local`, `.env.dev` ni el `.env` antiguo con `prod`.
 - [ ] Verifica la salud y el acceso a través del proxy HTTPS. Swagger/OpenAPI quedan deshabilitados en producción. No expongas Actuator directamente a Internet desde el proxy.
@@ -186,3 +202,12 @@ Pruebas automatizadas (requieren Docker, no requieren tus archivos dotenv):
 - [ ] Sustituye `compose.demo.yml` por `compose.local.yml` o `compose.dev.yml`, con su `--env-file` explícito. El antiguo `compose.api.yml` pasa a `compose.prod.yml`.
 - [ ] El helper opcional pasa de `scripts/start-demo.mjs` a `scripts/start-dev.mjs`. **Abre un túnel público temporal**: solo ejecútalo deliberadamente cuando quieras compartir el API; no forma parte de ninguno de los arranques normales.
 - [ ] El Compose histórico de `infra` sigue disponible para quienes aún lo usen; los comandos de esta guía son la entrada para estos nuevos entornos. No ejecutes ambos sobre los mismos puertos.
+
+## Desde MinIO hacia R2/S3
+
+- [ ] Provisiona los destinos y configura las nuevas variables `STORAGE_*`; las antiguas `MINIO_*` se retiran y no se usan como alias.
+- [ ] Si tienes archivos que conservar, cópialos a los nuevos buckets manteniendo sus claves relativas antes de retirar el servicio anterior. Actualiza las URLs públicas que apuntaban al host anterior; cambiar `ARCHIVOS_URL_PUBLICA` no reescribe URLs absolutas ya guardadas.
+- [ ] Recrea el stack dev con su comando habitual. Los servicios MinIO anteriores quedan como huérfanos: tras respaldar/copiar los objetos, puedes retirarlos deliberadamente con `down --remove-orphans`. Los volúmenes antiguos no se borran automáticamente.
+- [ ] Comprueba carga, lectura, URL firmada y rechazo anónimo. Solo entonces decide si quieres borrar los volúmenes antiguos.
+
+Las pruebas automatizadas usan PostgreSQL Testcontainers y un servidor HTTP de contrato del SDK, sin MinIO ni claves reales. La prueba remota está deshabilitada por defecto. Las rutas de archivos privados de `local` conservan su adaptador persistente; cambiar a `dev` no traslada automáticamente esos objetos al bucket remoto.

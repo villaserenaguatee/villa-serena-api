@@ -23,7 +23,7 @@ import com.villaserena.api.reservas.MetodoPago;
  * (la emisión) para que el check-out pueda reemplazar la emisión sin tocar esto.
  * <p>
  * El PDF no se genera al emitir: se arma al pedir la descarga (y al enviar el
- * correo), así el check-out no depende de MinIO.
+ * correo), así el check-out no depende del almacenamiento remoto.
  */
 @Service
 public class FacturaConsultaService {

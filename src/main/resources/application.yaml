@@ -85,13 +85,13 @@ villaserena:
     webhook-secreto: ${RECURRENTE_WEBHOOK_SECRET:}
     url-retorno-app: ${APP_URL_RETORNO:villaserena://pago-resultado}
   archivos:
-    url-publica: ${ARCHIVOS_URL_PUBLICA:http://localhost:9000/villaserena-publico}
-    # MinIO en dev; el perfil local utiliza su propio adaptador.
-    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-    endpoint-publico: ${MINIO_PUBLIC_ENDPOINT:${MINIO_ENDPOINT:http://localhost:9000}}
-    usuario: ${MINIO_ROOT_USER:villaserena}
-    contrasena: ${MINIO_ROOT_PASSWORD:}
-    bucket-privado: ${MINIO_BUCKET_PRIVATE:villaserena-privado}
+    url-publica: ${ARCHIVOS_URL_PUBLICA:}
+    endpoint: ${STORAGE_ENDPOINT:}
+    region: ${STORAGE_REGION:us-east-1}
+    usuario: ${STORAGE_ACCESS_KEY_ID:}
+    contrasena: ${STORAGE_SECRET_ACCESS_KEY:}
+    estilo-ruta: ${STORAGE_PATH_STYLE:false}
+    bucket-privado: ${STORAGE_BUCKET_PRIVATE:}
     # Vigencia de la URL firmada de las fotos privadas (incidencias).
     minutos-url-firmada: 10
   notificaciones:
@@ -100,7 +100,7 @@ villaserena:
     # API de Expo para las push de la app (HU-HUE-17). En las pruebas se apunta
     # a un servidor local.
     expo-push-url: ${EXPO_PUSH_URL:https://exp.host/--/api/v2/push/send}
-    app-descarga-url: ${APP_DOWNLOAD_URL:http://localhost:9000/villaserena-publico/app/villaserena.apk}
+    app-descarga-url: ${APP_DOWNLOAD_URL:}
     # Reintentos del Outbox (RN-NOT-003): 5 intentos, esperando 1 minuto más
     # cada vez (1, 2, 3, 4 minutos) antes de darlos por FALLIDO.
     intentos-maximos: 5
