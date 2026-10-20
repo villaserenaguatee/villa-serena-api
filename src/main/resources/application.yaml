@@ -42,10 +42,7 @@ spring:
           timeout: 5000
           writetimeout: 5000
   flyway:
-    # Solo el esquema. Los datos ficticios de la demostración (db/demo) y los
-    # hashes que necesitan se declaran únicamente en los perfiles que los usan:
-    # "demo" (application-demo.yaml) y "test" (application-test.yaml). Así una
-    # configuración de producción arranca sin conocer ningún secreto de demo.
+    # All profiles migrate the schema only. Local fixtures are loaded explicitly.
     locations: classpath:db/migration
 
 server:

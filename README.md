@@ -15,46 +15,42 @@ descargan ni generan el contrato.
 es diagnóstica hasta reconciliar las operaciones; las comprobaciones de revisión,
 herramientas, DTO y permisos sí son obligatorias en CI.
 
-## Migraciones y datos de demostración
+## Esquema y datos locales (#59)
 
-| Carpeta | Contenido | Cuándo se aplica |
-|---|---|---|
-| `src/main/resources/db/migration` | Esquema (V1 a V5 y las migraciones nuevas). | Siempre. |
-| `src/main/resources/db/demo` | Datos ficticios de presentación (`V6__datos_iniciales.sql`: hotel, habitaciones, tarifas, menú, canales simulados y empleados de prueba) y la validación de sus hashes. | Solo con el perfil `demo`. |
+Flyway versiona **solo el esquema**, en `src/main/resources/db/migration`, con nombres y comentarios SQL en inglés. Todos los perfiles usan esa misma carpeta. Los valores de negocio (`CONFIRMADA`, `RECEPCION`, etc.) conservan su representación actual. JDBC y JPA mapean el esquema en inglés a los DTO y atributos Java existentes.
 
-- **Local y demostración:** activa el perfil con `SPRING_PROFILES_ACTIVE=demo` y define `DEMO_PASSWORD_HASH`, `CANAL1_KEY_HASH` y `CANAL2_KEY_HASH` (ver `.env.example`). Si falta alguno, el API no arranca y no carga datos.
-- **Sin perfil (configuración destinada a producción):** solo se crea el esquema. No se cargan empleados, canales, tarifas ni habitaciones ficticias, y no se piden los hashes de demostración. Nunca actives `demo` en producción.
-- **Datos mínimos del sistema:** por ahora ninguno va en las migraciones; la configuración del hotel, el catálogo y los canales reales los registra Administración.
+Ningún perfil carga seeds al arrancar. El perfil `demo` solo habilita los adaptadores de archivos locales. Los datos ficticios están en `scripts/demo/load-data.sql`, fuera de los recursos de la aplicación y del JAR. Las reservas ficticias automáticas existen únicamente en el código de pruebas. El alta opcional del primer administrador sigue siendo una configuración explícita mediante `ADMIN_EMAIL`, `ADMIN_NAME` y `ADMIN_PASSWORD`; déjalas vacías si deseas un arranque sin registros.
 
-**Bases que ya aplicaron V1 a V6** (antes V6 estaba en `db/migration`): el archivo se movió sin cambiar su contenido, así que su checksum es el mismo y Flyway valida sin reparar nada. Con el perfil `demo` todo sigue igual; sin el perfil, el API arranca y los datos ya cargados se conservan (no se borra nada). No edites migraciones ya aplicadas: agrega una nueva.
+### Carga local explícita
 
-**Numeración:** los números de versión son únicos entre `db/migration` y `db/demo`. Coordina el siguiente número con el equipo antes de crear una migración en cualquiera de las dos carpetas.
-
-## Probar el esquema
-
-`scripts/probar-esquema.sql` **no es una migración ni sirve para inicializar una base**: es una prueba. Comprueba los datos de demostración y las restricciones de la base de datos (EXCLUDE de reservas, correos únicos, un cargo por pedido, una factura por cuenta, etc.). Corre dentro de una transacción que se deshace al final, así que **no deja datos**. Si algo falla, se detiene y muestra `FALLO ...`. Necesita una base migrada con el perfil `demo`.
-
-Las pruebas automáticas (`./mvnw test`) lo ejecutan sobre una base temporal con el perfil `demo` y comprueban que sin el perfil no se carga ningún dato ficticio.
-
-**Sobre una base ya migrada por Flyway** (con `SPRING_PROFILES_ACTIVE=demo ./mvnw spring-boot:run`):
+1. Arranca el API y espera a que Flyway termine y `/actuator/health` responda correctamente.
+2. Exporta `DEMO_PASSWORD_HASH`, `CANAL1_KEY_HASH` y `CANAL2_KEY_HASH` en tu terminal con valores privados válidos, según `.env.example`. El script los lee del entorno de `psql`; no se envían al API. No ejecutes `.env` con `source`: Spring lo interpreta como propiedades.
+3. Ejecuta la carga contra un contenedor **local y con las tablas de negocio vacías**. Ajusta el nombre, usuario y nombre de la instancia a tu entorno:
 
 ```bash
-docker exec -i villa-serena-dev-postgres-1 psql -U villaserena -d villaserena < scripts/probar-esquema.sql
+DEMO_CONTAINER=villa-serena-dev-postgres-1
+docker exec -i \
+  -e DEMO_PASSWORD_HASH -e CANAL1_KEY_HASH -e CANAL2_KEY_HASH \
+  "$DEMO_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U villaserena -d villaserena \
+  < scripts/demo/load-data.sql
 ```
 
-**Sin Spring, en una base temporal** (aplica el esquema y los datos de demostración con valores de prueba en los placeholders y la borra al final):
+El script valida los hashes, comprueba que el esquema esté migrado y rechaza tablas de negocio con datos. Ejecuta la carga en una transacción: un fallo revierte los registros insertados. Una segunda ejecución falla sin duplicar ni borrar datos. Nunca lo ejecutes en producción. No se agrega un endpoint HTTP para cargar fixtures.
+
+### Historial anterior y verificación
+
+Esta reorganización está autorizada antes del primer despliegue de producción: cambia nombres, descripciones y checksums de las migraciones anteriores. Los contenedores locales con el historial anterior necesitan una instancia nueva; conserva antes cualquier dato que necesites. No se ejecuta `clean` de Flyway ni se repara el historial automáticamente. Después de adoptar este esquema, conserva las migraciones aplicadas y utiliza versiones nuevas para evolucionarlo. V6 ya no existe: contenía el seed antiguo y su número queda reservado.
 
 ```bash
-C=villa-serena-dev-postgres-1; DB=vs_prueba_esquema
-docker exec $C psql -U villaserena -d postgres -c "CREATE DATABASE $DB"
-for f in $(ls src/main/resources/db/migration/V*.sql src/main/resources/db/demo/V*.sql | awk -F/ '{print $NF" "$0}' | sort -V | cut -d' ' -f2); do
-  sed -e 's/\${demo_password_hash}/hash-de-prueba-no-real/' \
-      -e 's/\${canal1_key_hash}/'"$(printf '0%.0s' {1..63})1"'/' \
-      -e 's/\${canal2_key_hash}/'"$(printf '0%.0s' {1..63})2"'/' \
-      "$f" | docker exec -i $C psql -q -U villaserena -d $DB -v ON_ERROR_STOP=1
-done
-docker exec -i $C psql -U villaserena -d $DB < scripts/probar-esquema.sql
-docker exec $C psql -U villaserena -d postgres -c "DROP DATABASE $DB WITH (FORCE)"
+./mvnw -B verify
+```
+
+Las pruebas requieren Docker, aplican Flyway en contenedores temporales y cargan el mismo script local después de las migraciones, fuera de su historial. Comprueban el arranque vacío, la carga posterior, las restricciones y la conservación de un catálogo propio durante una actualización.
+
+`scripts/test-schema.sql` comprueba las restricciones sobre una instancia local con los datos de prueba cargados. Su transacción se revierte al terminar:
+
+```bash
+docker exec -i "$DEMO_CONTAINER" psql -X -U villaserena -d villaserena < scripts/test-schema.sql
 ```
 
 ## Pagos con Recurrente (issue #54, ADR-017)

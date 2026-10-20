@@ -49,10 +49,10 @@ public class HuespedService {
     @Transactional
     public RegistroHuespedRespuesta registrar(HuespedDatos datos) {
         List<Long> nuevo = jdbc.queryForList("""
-                INSERT INTO huespedes
-                    (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento, pais_emisor_pasaporte)
+                INSERT INTO guests
+                    (full_name, email, phone, nationality, document_type, document_number, passport_issuing_country)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT ((lower(correo))) DO NOTHING
+                ON CONFLICT ((lower(email))) DO NOTHING
                 RETURNING id""", Long.class,
                 datos.nombreCompleto().trim(), datos.correo().trim(), datos.telefono().trim(),
                 datos.nacionalidad(), datos.tipoDocumento().name(), datos.numeroDocumento().trim(), datos.paisEmisorPasaporte());
@@ -72,10 +72,9 @@ public class HuespedService {
         }
         String patron = "%" + escaparLike(q) + "%";
         return jdbc.query("""
-                SELECT id, nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento, pais_emisor_pasaporte
-                FROM huespedes
-                WHERE nombre_completo ILIKE ? OR numero_documento ILIKE ? OR correo ILIKE ?
-                ORDER BY nombre_completo, id
+                SELECT id, full_name AS "nombre_completo", email AS "correo", phone AS "telefono", nationality AS "nacionalidad", document_type AS "tipo_documento", document_number AS "numero_documento", passport_issuing_country AS "pais_emisor_pasaporte" FROM guests
+                WHERE full_name ILIKE ? OR document_number ILIKE ? OR email ILIKE ?
+                ORDER BY full_name, id
                 LIMIT ?""",
                 (rs, i) -> new HuespedVista(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4),
                         rs.getString(5), TipoDocumento.valueOf(rs.getString(6)), rs.getString(7), rs.getString(8)),

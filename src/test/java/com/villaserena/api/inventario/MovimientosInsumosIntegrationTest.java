@@ -61,21 +61,21 @@ class MovimientosInsumosIntegrationTest {
 
     @BeforeEach
     void preparar() {
-        administrador = jdbc.queryForObject("SELECT id FROM empleados WHERE rol='ADMIN' ORDER BY id LIMIT 1", Long.class);
+        administrador = jdbc.queryForObject("SELECT id  FROM employees WHERE role='ADMIN' ORDER BY id LIMIT 1", Long.class);
         token = token("ADMIN");
         insumo = UUID.randomUUID();
         registros.add(insumo);
         String datos = "{\"nombre\":\"Insumo de prueba\",\"stock\":10,\"unidad\":\"unidad\",\"costoUnitario\":2}";
         jdbc.update("""
-                INSERT INTO gestion_registros(tipo,id,datos,creacion,creado_por)
+                INSERT INTO operation_records(type,id,data,creation,created_by)
                 VALUES ('insumos',?,?::jsonb,?::jsonb,?)""", insumo, datos, datos, administrador);
     }
 
     @AfterEach
     void limpiar() {
         for (UUID id : registros) {
-            jdbc.update("DELETE FROM gestion_auditoria WHERE registro_id=?", id);
-            jdbc.update("DELETE FROM gestion_registros WHERE id=?", id);
+            jdbc.update("DELETE FROM operations_audit WHERE record_id=?", id);
+            jdbc.update("DELETE FROM operation_records WHERE id=?", id);
         }
         registros.clear();
     }
@@ -99,7 +99,7 @@ class MovimientosInsumosIntegrationTest {
         assertThat(versionInsumo()).isEqualTo(2);
         assertThat(auditorias(insumo)).isEqualTo(1);
         assertThat(auditorias(id)).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT empleado_id FROM gestion_auditoria WHERE registro_id=?", Long.class, id))
+        assertThat(jdbc.queryForObject("SELECT employee_id AS \"empleado_id\" FROM operations_audit WHERE record_id=?", Long.class, id))
                 .isEqualTo(administrador);
         mvc.perform(get("/api/v1/gestion/movimientos").header("Authorization", token))
                 .andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id == '" + id + "')].tipo").value("entrada"));
@@ -233,13 +233,13 @@ class MovimientosInsumosIntegrationTest {
     void falloDeAuditoriaRevierteMovimientoYExistencias() throws Exception {
         UUID id = nuevoId();
         jdbc.update("""
-                INSERT INTO gestion_auditoria(tipo,registro_id,version,empleado_id,nuevo)
+                INSERT INTO operations_audit(type,record_id,version,employee_id,new)
                 VALUES ('movimientos',?,1,?,'{}')""", id, administrador);
         guardar(id, 0, datos("salida", 3), token).andExpect(status().isInternalServerError());
         assertThat(stock()).isEqualByComparingTo("10");
         assertThat(versionInsumo()).isEqualTo(1);
         assertThat(auditorias(insumo)).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM gestion_registros WHERE tipo='movimientos' AND id=?",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM operation_records WHERE type='movimientos' AND id=?",
                 Integer.class, id)).isZero();
     }
 
@@ -272,22 +272,22 @@ class MovimientosInsumosIntegrationTest {
     }
 
     private String token(String rol) {
-        String correo = jdbc.queryForObject("SELECT correo FROM empleados WHERE rol=? ORDER BY id LIMIT 1", String.class, rol);
+        String correo = jdbc.queryForObject("SELECT email AS \"correo\" FROM employees WHERE role=? ORDER BY id LIMIT 1", String.class, rol);
         return "Bearer " + tokens.emitirParaEmpleado(transacciones.execute(t -> empleados.findByCorreoIgnoreCase(correo).orElseThrow()))
                 .accessToken();
     }
 
     private BigDecimal stock() {
-        return jdbc.queryForObject("SELECT (datos->>'stock')::numeric FROM gestion_registros WHERE tipo='insumos' AND id=?",
+        return jdbc.queryForObject("SELECT (data->>'stock')::numeric  FROM operation_records WHERE type='insumos' AND id=?",
                 BigDecimal.class, insumo);
     }
 
     private long versionInsumo() {
-        return jdbc.queryForObject("SELECT version FROM gestion_registros WHERE tipo='insumos' AND id=?", Long.class, insumo);
+        return jdbc.queryForObject("SELECT version  FROM operation_records WHERE type='insumos' AND id=?", Long.class, insumo);
     }
 
     private int auditorias(UUID id) {
-        return jdbc.queryForObject("SELECT count(*) FROM gestion_auditoria WHERE registro_id=?", Integer.class, id);
+        return jdbc.queryForObject("SELECT count(*)  FROM operations_audit WHERE record_id=?", Integer.class, id);
     }
 
     private void assertSinCambios(UUID movimiento) {

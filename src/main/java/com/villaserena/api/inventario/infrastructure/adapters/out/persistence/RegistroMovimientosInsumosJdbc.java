@@ -31,8 +31,8 @@ public class RegistroMovimientosInsumosJdbc implements RegistroMovimientosInsumo
     @Override
     public List<Registro> listar() {
         return jdbc.query("""
-                SELECT id,datos::text,creacion::text,version FROM gestion_registros
-                WHERE tipo='movimientos' ORDER BY creado_en,id""",
+                SELECT id,data::text AS datos,creation::text AS creacion,version  FROM operation_records
+                WHERE type='movimientos' ORDER BY created_at,id""",
                 (rs, n) -> new Registro(rs.getObject("id", UUID.class), rs.getLong("version"),
                         leer(rs.getString("datos")), leer(rs.getString("creacion"))));
     }
@@ -46,8 +46,8 @@ public class RegistroMovimientosInsumosJdbc implements RegistroMovimientosInsumo
     @Override
     public Optional<Registro> buscarBloqueado(UUID id) {
         return jdbc.query("""
-                SELECT id,datos::text,creacion::text,version FROM gestion_registros
-                WHERE tipo='movimientos' AND id=? FOR UPDATE""",
+                SELECT id,data::text AS datos,creation::text AS creacion,version  FROM operation_records
+                WHERE type='movimientos' AND id=? FOR UPDATE""",
                 (rs, n) -> new Registro(rs.getObject("id", UUID.class), rs.getLong("version"),
                         leer(rs.getString("datos")), leer(rs.getString("creacion"))), id).stream().findFirst();
     }
@@ -55,8 +55,8 @@ public class RegistroMovimientosInsumosJdbc implements RegistroMovimientosInsumo
     @Override
     public BigDecimal bloquearExistencias(UUID insumoId) {
         var filas = jdbc.queryForList("""
-                SELECT datos::text AS datos FROM gestion_registros
-                WHERE tipo='insumos' AND id=? FOR UPDATE""", insumoId);
+                SELECT data::text AS datos  FROM operation_records
+                WHERE type='insumos' AND id=? FOR UPDATE""", insumoId);
         if (filas.isEmpty()) {
             throw ApiException.datosInvalidos("Selecciona un registro existente de insumos.", List.of());
         }
@@ -70,16 +70,16 @@ public class RegistroMovimientosInsumosJdbc implements RegistroMovimientosInsumo
     @Override
     public void actualizarExistencias(UUID insumoId, BigDecimal existencias, long empleadoId) {
         var fila = jdbc.queryForMap("""
-                SELECT datos::text AS datos,version FROM gestion_registros
-                WHERE tipo='insumos' AND id=?""", insumoId);
+                SELECT data::text AS datos,version  FROM operation_records
+                WHERE type='insumos' AND id=?""", insumoId);
         String anterior = (String) fila.get("datos");
         var datos = leer(anterior);
         datos.put("stock", existencias);
         long version = ((Number) fila.get("version")).longValue() + 1;
         String nuevo = json.writeValueAsString(datos);
         jdbc.update("""
-                UPDATE gestion_registros SET datos=?::jsonb,version=?,actualizado_en=now()
-                WHERE tipo='insumos' AND id=?""", nuevo, version, insumoId);
+                UPDATE operation_records SET data=?::jsonb,version=?,updated_at=now()
+                WHERE type='insumos' AND id=?""", nuevo, version, insumoId);
         auditar("insumos", insumoId, version, empleadoId, anterior, nuevo);
     }
 
@@ -87,7 +87,7 @@ public class RegistroMovimientosInsumosJdbc implements RegistroMovimientosInsumo
     public Registro crear(UUID id, Map<String, Object> datos, Map<String, Object> creacion, long empleadoId) {
         String nuevo = json.writeValueAsString(datos);
         jdbc.update("""
-                INSERT INTO gestion_registros(tipo,id,datos,creacion,creado_por)
+                INSERT INTO operation_records(type,id,data,creation,created_by)
                 VALUES ('movimientos',?,?::jsonb,?::jsonb,?)""", id, nuevo, json.writeValueAsString(creacion), empleadoId);
         auditar("movimientos", id, 1, empleadoId, null, nuevo);
         return new Registro(id, 1, datos, creacion);
@@ -95,7 +95,7 @@ public class RegistroMovimientosInsumosJdbc implements RegistroMovimientosInsumo
 
     private void auditar(String tipo, UUID id, long version, long empleadoId, String anterior, String nuevo) {
         jdbc.update("""
-                INSERT INTO gestion_auditoria(tipo,registro_id,version,empleado_id,anterior,nuevo)
+                INSERT INTO operations_audit(type,record_id,version,employee_id,previous,new)
                 VALUES (?,?,?,?,?::jsonb,?::jsonb)""", tipo, id, version, empleadoId, anterior, nuevo);
     }
 

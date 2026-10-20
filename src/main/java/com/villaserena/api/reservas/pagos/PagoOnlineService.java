@@ -89,7 +89,7 @@ public class PagoOnlineService {
     @Transactional
     public PagoIniciado iniciarPagoReserva(String codigo) {
         Reserva reserva = reservaService.porCodigo(codigo);
-        String estadoActual=jdbc.queryForObject("SELECT estado FROM reservas WHERE id=? FOR UPDATE",String.class,reserva.getId());
+        String estadoActual=jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE id=? FOR UPDATE",String.class,reserva.getId());
         if (!"PENDIENTE_PAGO".equals(estadoActual)) {
             throw ApiException.conflicto("RESERVA_NO_PENDIENTE", "La reserva ya no está pendiente de pago.");
         }
@@ -156,7 +156,7 @@ public class PagoOnlineService {
      */
     @Transactional
     public void procesarEvento(PasarelaPagos.Evento evento) {
-        int nuevo = jdbc.update("INSERT INTO pago_eventos (evento_id, tipo) VALUES (?, ?) ON CONFLICT DO NOTHING",
+        int nuevo = jdbc.update("INSERT INTO payment_events (event_id, type) VALUES (?, ?) ON CONFLICT DO NOTHING",
                 evento.id(), evento.tipo());
         if (nuevo == 0 || evento.sesion() == null) {
             return;

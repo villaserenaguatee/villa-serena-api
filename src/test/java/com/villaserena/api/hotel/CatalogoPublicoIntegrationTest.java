@@ -48,7 +48,7 @@ class CatalogoPublicoIntegrationTest {
 
     @Test
     void elHotelSeVeSinSesionConSusFotosYHorasFijas() throws Exception {
-        jdbc.update("INSERT INTO fotos_hotel (clave_objeto, orden) VALUES ('hotel/jardin.jpg', 2), "
+        jdbc.update("INSERT INTO hotel_photos (object_key, sort_order) VALUES ('hotel/jardin.jpg', 2), "
                 + "('hotel/fachada.jpg', 1)");
         String base = propiedades.archivos().urlPublica();
         mvc.perform(get("/api/v1/publico/hotel"))
@@ -69,7 +69,7 @@ class CatalogoPublicoIntegrationTest {
 
     @Test
     void sinConfiguracionDelHotelResponde404() throws Exception {
-        jdbc.update("DELETE FROM configuracion_hotel");
+        jdbc.update("DELETE FROM hotel_configuration");
         mvc.perform(get("/api/v1/publico/hotel"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("HOTEL_NO_CONFIGURADO"));
@@ -87,12 +87,12 @@ class CatalogoPublicoIntegrationTest {
                 .andExpect(jsonPath("$[?(@.nombre == 'Estándar Jardín')].precioBaseNoche").value(650.00))
                 .andExpect(jsonPath("$[?(@.nombre == 'Estándar Jardín')].fotos[*]", hasSize(0)));
 
-        jdbc.update("UPDATE tipos_habitacion SET estado = 'INACTIVO' WHERE nombre = 'Suite Volcán'");
+        jdbc.update("UPDATE room_types SET status = 'INACTIVO' WHERE name = 'Suite Volcán'");
         mvc.perform(get("/api/v1/publico/tipos-habitacion"))
                 .andExpect(jsonPath("$", hasSize(11)))
                 .andExpect(jsonPath("$[*].nombre", not(hasItem("Suite Volcán"))));
 
-        jdbc.update("UPDATE tipos_habitacion SET estado = 'INACTIVO'");
+        jdbc.update("UPDATE room_types SET status = 'INACTIVO'");
         mvc.perform(get("/api/v1/publico/tipos-habitacion"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
@@ -102,7 +102,7 @@ class CatalogoPublicoIntegrationTest {
     void elDetalleTraeTodasLasFotosConLaPrincipalPrimero() throws Exception {
         long id = tipoId("Doble Superior");
         jdbc.update("""
-                INSERT INTO fotos_tipo_habitacion (tipo_habitacion_id, clave_objeto, es_principal, orden)
+                INSERT INTO room_type_photos (room_type_id, object_key, is_primary, sort_order)
                 VALUES (?, 'tipos/1/bano.jpg', FALSE, 1), (?, 'tipos/1/principal.jpg', TRUE, 5)""", id, id);
         String base = propiedades.archivos().urlPublica();
         mvc.perform(get("/api/v1/publico/tipos-habitacion/{id}", id))
@@ -118,7 +118,7 @@ class CatalogoPublicoIntegrationTest {
     @Test
     void unTipoInactivoOInexistenteResponde404() throws Exception {
         long id = tipoId("Suite Familiar");
-        jdbc.update("UPDATE tipos_habitacion SET estado = 'INACTIVO' WHERE id = ?", id);
+        jdbc.update("UPDATE room_types SET status = 'INACTIVO' WHERE id = ?", id);
         mvc.perform(get("/api/v1/publico/tipos-habitacion/{id}", id))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("NO_ENCONTRADO"));
@@ -127,6 +127,6 @@ class CatalogoPublicoIntegrationTest {
     }
 
     private long tipoId(String nombre) {
-        return jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = ?", Long.class, nombre);
+        return jdbc.queryForObject("SELECT id  FROM room_types WHERE name = ?", Long.class, nombre);
     }
 }

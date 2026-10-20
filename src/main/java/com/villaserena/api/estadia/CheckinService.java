@@ -58,7 +58,7 @@ public class CheckinService {
         }
         long habitacionId = reserva.getHabitacionId();
         Habitacion habitacion = jdbc.query(
-                "SELECT numero, ocupacion, condicion FROM habitaciones WHERE id = ? FOR UPDATE",
+                "SELECT number AS \"numero\", occupancy AS \"ocupacion\", condition AS \"condicion\" FROM rooms WHERE id = ? FOR UPDATE",
                 (rs, i) -> new Habitacion(rs.getString(1), rs.getString(2), rs.getString(3)), habitacionId)
                 .getFirst();
         if (!"LIBRE".equals(habitacion.ocupacion()) || !"LIMPIA".equals(habitacion.condicion())) {
@@ -67,7 +67,7 @@ public class CheckinService {
         }
 
         Responsable recepcionista = Responsable.empleado(empleadoId);
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE id = ?", habitacionId);
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA' WHERE id = ?", habitacionId);
         historial.registrar(TipoEntidadHistorial.HABITACION_OCUPACION, habitacionId, "LIBRE", "OCUPADA",
                 recepcionista, null);
         reservaService.cambiarEstado(reserva, EstadoReserva.EN_ESTADIA, recepcionista, null);

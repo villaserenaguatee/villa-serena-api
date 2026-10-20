@@ -79,7 +79,7 @@ class HabitacionesIntegrationTest {
     void preparar() {
         recepcion = token("ana.perez@villaserena.test");
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Marta Habitación', 'marta.hab@correo.test', '+502 5555 3333', 'Guatemalteca', 'DPI', '3333333330101')
                 RETURNING id""", Long.class);
     }
@@ -93,7 +93,7 @@ class HabitacionesIntegrationTest {
 
     @Test
     void listaLasHabitacionesActivasConSuEstado() throws Exception {
-        jdbc.update("UPDATE habitaciones SET estado = 'INACTIVO' WHERE numero = '303'");
+        jdbc.update("UPDATE rooms SET status = 'INACTIVO' WHERE number = '303'");
         // 22 habitaciones del seed (V6) y del inventario aprobado (V24), menos la 303.
         listar("")
                 .andExpect(status().isOk())
@@ -112,8 +112,8 @@ class HabitacionesIntegrationTest {
 
     @Test
     void losFiltrosSeCombinan() throws Exception {
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE numero IN ('201', '104')");
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE numero = '202'");
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE number IN ('201', '104')");
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA' WHERE number = '202'");
         listar("?piso=2").andExpect(jsonPath("$[*].numero", contains("201", "202", "203", "204", "205", "206", "207")));
         listar("?condicion=SUCIA").andExpect(jsonPath("$[*].numero", contains("104", "201")));
         listar("?ocupacion=OCUPADA").andExpect(jsonPath("$[*].numero", contains("202")));
@@ -130,13 +130,13 @@ class HabitacionesIntegrationTest {
         // Sale hoy: reserva EN_ESTADIA con salida hoy.
         String codigo = codigoDe(crear(tipoId("Doble Superior"), "2026-10-06", "2026-10-08", habitacionId("104")));
         jdbc.update("""
-                UPDATE reservas SET estado = 'EN_ESTADIA', fecha_entrada = '2026-10-03', fecha_salida = '2026-10-05'
-                WHERE codigo = ?""", codigo);
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE numero = '104'");
+                UPDATE reservations SET status = 'EN_ESTADIA', checkin_date = '2026-10-03', checkout_date = '2026-10-05'
+                WHERE code = ?""", codigo);
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA' WHERE number = '104'");
         // Incidencia pendiente: ocupada con una incidencia que impide su uso.
         incidencia("104", true, "Aire acondicionado no enfría.");
         // Incidencia sin impedir el uso: no cuenta.
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE numero = '105'");
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA' WHERE number = '105'");
         incidencia("105", false, "Foco fundido.");
 
         listar("?piso=1")
@@ -155,7 +155,7 @@ class HabitacionesIntegrationTest {
 
     @Test
     void fueraDeServicioMuestraLaIncidenciaQueLaBloquea() throws Exception {
-        jdbc.update("UPDATE habitaciones SET condicion = 'FUERA_DE_SERVICIO' WHERE numero = '201'");
+        jdbc.update("UPDATE rooms SET condition = 'FUERA_DE_SERVICIO' WHERE number = '201'");
         long id = incidencia("201", true, "Fuga de agua en el baño.");
         incidencia("201", false, "Cortina rota.");
 
@@ -177,19 +177,19 @@ class HabitacionesIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.numero").value("102"))
                 .andExpect(jsonPath("$.condicion").value("SUCIA"));
-        assertThat(jdbc.queryForObject("SELECT condicion FROM habitaciones WHERE id = ?", String.class, id))
+        assertThat(jdbc.queryForObject("SELECT condition AS \"condicion\" FROM rooms WHERE id = ?", String.class, id))
                 .isEqualTo("SUCIA");
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM historial_estados h JOIN empleados e ON e.id = h.id_responsable
-                WHERE h.tipo_entidad = 'HABITACION_CONDICION' AND h.id_entidad = ?
-                  AND h.estado_anterior = 'LIMPIA' AND h.estado_nuevo = 'SUCIA'
-                  AND h.tipo_responsable = 'EMPLEADO' AND e.correo = 'ana.perez@villaserena.test'""",
+                SELECT count(*)  FROM status_history h JOIN employees e ON e.id = h.responsible_id
+                WHERE h.entity_type = 'HABITACION_CONDICION' AND h.entity_id = ?
+                  AND h.previous_status = 'LIMPIA' AND h.new_status = 'SUCIA'
+                  AND h.responsible_type = 'EMPLEADO' AND e.email = 'ana.perez@villaserena.test'""",
                 Integer.class, id)).isEqualTo(1);
     }
 
     @Test
     void marcarSuciaEnCualquierOtroEstadoDa409() throws Exception {
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE numero = '101'");
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA' WHERE number = '101'");
         marcarSucia(habitacionId("101"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("ESTADO_INVALIDO"))
@@ -199,7 +199,7 @@ class HabitacionesIntegrationTest {
         marcarSucia(sucia).andExpect(status().isOk());
         marcarSucia(sucia).andExpect(status().isConflict());
 
-        jdbc.update("UPDATE habitaciones SET condicion = 'FUERA_DE_SERVICIO' WHERE numero = '201'");
+        jdbc.update("UPDATE rooms SET condition = 'FUERA_DE_SERVICIO' WHERE number = '201'");
         marcarSucia(habitacionId("201")).andExpect(status().isConflict());
 
         marcarSucia(999_999).andExpect(status().isNotFound());
@@ -218,8 +218,8 @@ class HabitacionesIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.habitacion.numero").value("105"));
         assertThat(jdbc.queryForObject("""
-                SELECT e.correo FROM reservas r JOIN empleados e ON e.id = r.habitacion_asignada_por_empleado_id
-                WHERE r.codigo = ?""", String.class, codigo)).isEqualTo("ana.perez@villaserena.test");
+                SELECT e.email AS "correo" FROM reservations r JOIN employees e ON e.id = r.room_assigned_by_employee_id
+                WHERE r.code = ?""", String.class, codigo)).isEqualTo("ana.perez@villaserena.test");
     }
 
     @Test
@@ -239,16 +239,16 @@ class HabitacionesIntegrationTest {
         String codigo = codigoDe(crear(tipoId("Doble Superior"), "2026-10-15", "2026-10-17", null));
         asignar(codigo, habitacionId("101")).andExpect(status().isBadRequest());
 
-        jdbc.update("UPDATE habitaciones SET condicion = 'FUERA_DE_SERVICIO' WHERE numero = '104'");
+        jdbc.update("UPDATE rooms SET condition = 'FUERA_DE_SERVICIO' WHERE number = '104'");
         asignar(codigo, habitacionId("104"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("HABITACION_NO_DISPONIBLE"));
 
         // No exige que esté limpia.
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE numero = '105'");
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE number = '105'");
         asignar(codigo, habitacionId("105")).andExpect(status().isOk());
 
-        jdbc.update("UPDATE reservas SET estado = 'EN_ESTADIA' WHERE codigo = ?", codigo);
+        jdbc.update("UPDATE reservations SET status = 'EN_ESTADIA' WHERE code = ?", codigo);
         entityManager.clear();
         asignar(codigo, habitacionId("103"))
                 .andExpect(status().isConflict())
@@ -264,8 +264,8 @@ class HabitacionesIntegrationTest {
     @Test
     void disponiblesExcluyeTraslapesYFueraDeServicio() throws Exception {
         crear(tipoId("Doble Superior"), "2026-10-15", "2026-10-17", habitacionId("103"));
-        jdbc.update("UPDATE habitaciones SET condicion = 'FUERA_DE_SERVICIO' WHERE numero = '104'");
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE numero = '105'");
+        jdbc.update("UPDATE rooms SET condition = 'FUERA_DE_SERVICIO' WHERE number = '104'");
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE number = '105'");
         disponibles(tipoId("Doble Superior"), "2026-10-16", "2026-10-18")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[*].numero", contains("105", "203")))
@@ -299,7 +299,7 @@ class HabitacionesIntegrationTest {
                     .andExpect(status().isForbidden());
         }
         mvc.perform(get("/api/v1/habitaciones")).andExpect(status().isUnauthorized());
-        assertThat(jdbc.queryForObject("SELECT condicion FROM habitaciones WHERE numero = '102'", String.class))
+        assertThat(jdbc.queryForObject("SELECT condition AS \"condicion\" FROM rooms WHERE number = '102'", String.class))
                 .isEqualTo("LIMPIA");
     }
 
@@ -339,9 +339,9 @@ class HabitacionesIntegrationTest {
 
     private long incidencia(String numero, boolean impideUso, String descripcion) {
         return jdbc.queryForObject("""
-                INSERT INTO incidencias (habitacion_id, descripcion, impide_uso, reportada_por_empleado_id)
-                SELECT h.id, ?, ?, e.id FROM habitaciones h, empleados e
-                WHERE h.numero = ? AND e.correo = 'luis.garcia@villaserena.test'
+                INSERT INTO incidents (room_id, description, blocks_use, reported_by_employee_id)
+                SELECT h.id, ?, ?, e.id FROM rooms h, employees e
+                WHERE h.number = ? AND e.email = 'luis.garcia@villaserena.test'
                 RETURNING id""", Long.class, descripcion, impideUso, numero);
     }
 
@@ -356,10 +356,10 @@ class HabitacionesIntegrationTest {
     }
 
     private long tipoId(String nombre) {
-        return jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = ?", Long.class, nombre);
+        return jdbc.queryForObject("SELECT id  FROM room_types WHERE name = ?", Long.class, nombre);
     }
 
     private long habitacionId(String numero) {
-        return jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = ?", Long.class, numero);
+        return jdbc.queryForObject("SELECT id  FROM rooms WHERE number = ?", Long.class, numero);
     }
 }

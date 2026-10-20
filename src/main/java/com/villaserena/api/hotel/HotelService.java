@@ -32,10 +32,10 @@ public class HotelService {
     /** 404 si el hotel todavía no está configurado (sin datos de demostración ni registro de Administración). */
     @Transactional(readOnly = true)
     public HotelPublico publico() {
-        List<String> fotos = jdbc.queryForList("SELECT clave_objeto FROM fotos_hotel ORDER BY orden, id",
+        List<String> fotos = jdbc.queryForList("SELECT object_key AS \"clave_objeto\" FROM hotel_photos ORDER BY sort_order, id",
                 String.class).stream().map(clave -> urlPublica + "/" + clave).toList();
         return jdbc.query("""
-                SELECT nombre, descripcion, direccion, telefono, correo FROM configuracion_hotel WHERE id = 1""",
+                SELECT name AS "nombre", description AS "descripcion", address AS "direccion", phone AS "telefono", email AS "correo" FROM hotel_configuration WHERE id = 1""",
                 (rs, i) -> new HotelPublico(rs.getString(1), rs.getString(2), fotos,
                         new HotelPublico.Ubicacion(rs.getString(3)),
                         new HotelPublico.Contacto(rs.getString(4), rs.getString(5)), HORA_CHECK_IN, HORA_CHECK_OUT))

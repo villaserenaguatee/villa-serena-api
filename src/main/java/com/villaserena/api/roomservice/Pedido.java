@@ -14,11 +14,11 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Pedido de Room Service (tabla {@code pedidos}). El "Pedido #n" del cargo es el
+ * Pedido de Room Service (tabla {@code orders}). El "Pedido #n" del cargo es el
  * id. El motivo de cancelación no se guarda aquí: vive en {@code historial_estados}.
  */
 @Entity
-@Table(name = "pedidos")
+@Table(name = "orders")
 @Getter
 @Setter
 public class Pedido {
@@ -27,15 +27,16 @@ public class Pedido {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "reserva_id", nullable = false)
+    @Column(name = "reservation_id", nullable = false)
     private Long reservaId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private EstadoPedido estado = EstadoPedido.NUEVO;
 
+    @Column(name = "notes")
     private String notas;
 
-    @Column(name = "creado_en", nullable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant creadoEn;
 }

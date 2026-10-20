@@ -3,13 +3,12 @@ package com.villaserena.api;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -18,8 +17,13 @@ import org.springframework.test.context.TestPropertySource;
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
-// Clave pública de prueba: este contexto no activa el perfil test.
-@TestPropertySource(properties = "villaserena.jwt.secreto=UHVibGljIHRlc3QgZml4dHVyZSBvbmx5IC0gbmV2ZXIgY29uZmlndXJlIHRoZSBhcHBsaWNhdGlvbiB3aXRoIHRoaXMgdmFsdWUu")
+@ActiveProfiles("prod")
+@TestPropertySource(properties = {
+		"spring.config.import=",
+		"villaserena.primer-admin.correo=",
+		"villaserena.primer-admin.nombre=",
+		"villaserena.primer-admin.contrasena=",
+		"villaserena.jwt.secreto=UHVibGljIHRlc3QgZml4dHVyZSBvbmx5IC0gbmV2ZXIgY29uZmlndXJlIHRoZSBhcHBsaWNhdGlvbiB3aXRoIHRoaXMgdmFsdWUu" })
 class MigracionesSinDemoTests {
 
 	@Autowired
@@ -30,20 +34,26 @@ class MigracionesSinDemoTests {
 
 	@Test
 	void noAplicaElSeedDeDemostracion() {
-		Integer v6 = jdbc.queryForObject(
-				"SELECT count(*) FROM flyway_schema_history WHERE version = '6'", Integer.class);
+		Integer semillas = jdbc.queryForObject("""
+				SELECT count(*)  FROM flyway_schema_history WHERE version IN ('6','17.1','22.1','24.1')
+				""", Integer.class);
 		Integer esquema = jdbc.queryForObject(
-				"SELECT count(*) FROM flyway_schema_history WHERE version IN ('1','2','3','4','5') AND success",
+				"SELECT count(*)  FROM flyway_schema_history WHERE version IN ('1','2','3','4','5') AND success",
 				Integer.class);
-		assertThat(v6).isZero();
+		assertThat(semillas).isZero();
 		assertThat(esquema).isEqualTo(5);
 	}
 
-	@ParameterizedTest
-	@ValueSource(strings = { "configuracion_hotel", "series_factura", "tipos_habitacion", "habitaciones",
-			"temporadas", "items_menu", "articulos", "canales", "empleados" })
-	void lasTablasQuedanSinDatosFicticios(String tabla) {
-		assertThat(jdbc.queryForObject("SELECT count(*) FROM " + tabla, Integer.class)).isZero();
+	@Test
+	void todasLasTablasDeNegocioQuedanVacias() {
+		var tablas = jdbc.queryForList("""
+				SELECT tablename  FROM pg_tables
+				WHERE schemaname = 'public' AND tablename <> 'flyway_schema_history'
+				ORDER BY tablename
+				""", String.class);
+		assertThat(tablas).isNotEmpty().allSatisfy(tabla ->
+				assertThat(jdbc.queryForObject("SELECT count(*)  FROM \"" + tabla.replace("\"", "\"\"") + "\"", Long.class))
+						.as("Filas iniciales en %s", tabla).isZero());
 	}
 
 	@Test

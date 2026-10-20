@@ -19,8 +19,7 @@ out = subprocess.check_output(
      "--recursive", "--with-decryption", "--region", region,
      "--output", "json"], text=True)
 entries = json.loads(out)["Parameters"]
-required = {"SPRING_DATASOURCE_PASSWORD", "DEMO_PASSWORD_HASH",
-            "CANAL1_KEY_HASH", "CANAL2_KEY_HASH"}
+required = {"SPRING_DATASOURCE_PASSWORD", "JWT_SECRET"}
 values = {p["Name"].rsplit("/", 1)[-1]: p["Value"] for p in entries}
 missing = required - values.keys()
 if missing:

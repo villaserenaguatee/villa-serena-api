@@ -13,9 +13,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Cuenta de la reserva (tabla {@code cuentas}); se crea junto con ella (RN-PAG-009). */
+/** Cuenta de la reserva (tabla {@code accounts}); se crea junto con ella (RN-PAG-009). */
 @Entity
-@Table(name = "cuentas")
+@Table(name = "accounts")
 @Getter
 @Setter
 public class Cuenta {
@@ -24,17 +24,17 @@ public class Cuenta {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "reserva_id", nullable = false)
+    @Column(name = "reservation_id", nullable = false)
     private Long reservaId;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private EstadoCuenta estado = EstadoCuenta.ABIERTA;
 
-    @Column(name = "abierta_en", nullable = false)
+    @Column(name = "opened_at", nullable = false)
     private Instant abiertaEn;
 
-    @Column(name = "cerrada_en")
+    @Column(name = "closed_at")
     private Instant cerradaEn;
 
     public boolean estaAbierta() {

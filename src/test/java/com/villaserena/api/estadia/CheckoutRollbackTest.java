@@ -63,13 +63,13 @@ class CheckoutRollbackTest {
     @Test
     void siLaFacturaFallaNoCambiaNada() {
         long recepcionista = jdbc.queryForObject(
-                "SELECT id FROM empleados WHERE correo = 'ana.perez@villaserena.test'", Long.class);
+                "SELECT id  FROM employees WHERE email = 'ana.perez@villaserena.test'", Long.class);
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Rollback', 'rollback@correo.test', '+502 0', 'Guatemalteca', 'DPI', '0') RETURNING id""",
                 Long.class);
-        habitacionId = jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = '102'", Long.class);
-        long tipo = jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = 'Estándar Jardín'", Long.class);
+        habitacionId = jdbc.queryForObject("SELECT id  FROM rooms WHERE number = '102'", Long.class);
+        long tipo = jdbc.queryForObject("SELECT id  FROM room_types WHERE name = 'Estándar Jardín'", Long.class);
         Reserva reserva = reservaService.crear(SolicitudReserva.recepcion(huespedId, tipo,
                 LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-07"), 1, habitacionId, recepcionista));
         reservaId = reserva.getId();
@@ -81,34 +81,34 @@ class CheckoutRollbackTest {
                 new PagoRecepcionPeticion(MetodoPago.EFECTIVO, null), false, Responsable.empleado(recepcionista)))
                 .isInstanceOf(IllegalStateException.class);
 
-        assertThat(jdbc.queryForObject("SELECT estado FROM reservas WHERE id = ?", String.class, reservaId))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE id = ?", String.class, reservaId))
                 .isEqualTo("EN_ESTADIA");
-        assertThat(jdbc.queryForObject("SELECT estado FROM cuentas WHERE reserva_id = ?", String.class, reservaId))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM accounts WHERE reservation_id = ?", String.class, reservaId))
                 .isEqualTo("ABIERTA");
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM pagos p JOIN cuentas c ON c.id = p.cuenta_id WHERE c.reserva_id = ?""",
+                SELECT count(*)  FROM payments p JOIN accounts c ON c.id = p.account_id WHERE c.reservation_id = ?""",
                 Integer.class, reservaId)).isZero();
-        assertThat(jdbc.queryForObject("SELECT ocupacion FROM habitaciones WHERE id = ?", String.class, habitacionId))
+        assertThat(jdbc.queryForObject("SELECT occupancy AS \"ocupacion\" FROM rooms WHERE id = ?", String.class, habitacionId))
                 .isEqualTo("OCUPADA");
     }
 
     @AfterEach
     void limpiar() {
         if (reservaId != null) {
-            jdbc.update("DELETE FROM historial_estados WHERE tipo_entidad = 'RESERVA' AND id_entidad = ?", reservaId);
-            jdbc.update("DELETE FROM pagos WHERE cuenta_id IN (SELECT id FROM cuentas WHERE reserva_id = ?)", reservaId);
-            jdbc.update("DELETE FROM cargos WHERE cuenta_id IN (SELECT id FROM cuentas WHERE reserva_id = ?)", reservaId);
-            jdbc.update("DELETE FROM cuentas WHERE reserva_id = ?", reservaId);
-            jdbc.update("DELETE FROM reserva_noches WHERE reserva_id = ?", reservaId);
-            jdbc.update("DELETE FROM reservas WHERE id = ?", reservaId);
+            jdbc.update("DELETE FROM status_history WHERE entity_type = 'RESERVA' AND entity_id = ?", reservaId);
+            jdbc.update("DELETE FROM payments WHERE account_id IN (SELECT id FROM accounts WHERE reservation_id = ?)", reservaId);
+            jdbc.update("DELETE FROM charges WHERE account_id IN (SELECT id FROM accounts WHERE reservation_id = ?)", reservaId);
+            jdbc.update("DELETE FROM accounts WHERE reservation_id = ?", reservaId);
+            jdbc.update("DELETE FROM reservation_nights WHERE reservation_id = ?", reservaId);
+            jdbc.update("DELETE FROM reservations WHERE id = ?", reservaId);
         }
         if (habitacionId != null) {
-            jdbc.update("DELETE FROM historial_estados WHERE tipo_entidad LIKE 'HABITACION%' AND id_entidad = ?",
+            jdbc.update("DELETE FROM status_history WHERE entity_type LIKE 'HABITACION%' AND entity_id = ?",
                     habitacionId);
-            jdbc.update("UPDATE habitaciones SET ocupacion = 'LIBRE', condicion = 'LIMPIA' WHERE id = ?", habitacionId);
+            jdbc.update("UPDATE rooms SET occupancy = 'LIBRE', condition = 'LIMPIA' WHERE id = ?", habitacionId);
         }
         if (huespedId != null) {
-            jdbc.update("DELETE FROM huespedes WHERE id = ?", huespedId);
+            jdbc.update("DELETE FROM guests WHERE id = ?", huespedId);
         }
     }
 }

@@ -15,10 +15,10 @@ public class ArchivosLecturaController {
  @PreAuthorize("hasAnyRole('HUESPED','RECEPCION','ADMIN','MANTENIMIENTO_LIMPIEZA')")
  public ResponseEntity<byte[]> leer(@PathVariable UUID id,@RequestParam long exp,@RequestParam String firma){
   if ("HUESPED".equals(UsuarioActual.rol())) {
-   boolean propio=Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM archivos_privados_locales a JOIN facturas f ON f.clave_pdf=a.clave JOIN cuentas c ON c.id=f.cuenta_id JOIN reservas r ON r.id=c.reserva_id WHERE a.id=? AND r.huesped_id=?)",Boolean.class,id,UsuarioActual.id()));
+   boolean propio=Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM local_private_files a JOIN invoices f ON f.pdf_key=a.key JOIN accounts c ON c.id=f.account_id JOIN reservations r ON r.id=c.reservation_id WHERE a.id=? AND r.guest_id=?)",Boolean.class,id,UsuarioActual.id()));
    if(!propio)throw ApiException.noEncontrado();
   }else if("MANTENIMIENTO_LIMPIEZA".equals(UsuarioActual.rol())){
-   boolean incidencia=Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM archivos_privados_locales WHERE id=? AND clave LIKE 'incidencias/%')",Boolean.class,id));
+   boolean incidencia=Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM local_private_files WHERE id=? AND key LIKE 'incidencias/%')",Boolean.class,id));
    if(!incidencia)throw ApiException.noEncontrado();
   }
   return archivos.descargar(id,exp,firma);

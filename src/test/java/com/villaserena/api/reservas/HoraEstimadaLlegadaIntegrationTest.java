@@ -71,7 +71,7 @@ class HoraEstimadaLlegadaIntegrationTest {
         Map<String, Object> body = peticion(oferta);
         body.put("horaEstimadaLlegada", hora);
         String codigo = codigo(crear(oferta, body, intento(body)));
-        assertThat(jdbc.queryForObject("SELECT hora_estimada_llegada FROM reservas WHERE codigo = ?",
+        assertThat(jdbc.queryForObject("SELECT estimated_arrival_time AS \"hora_estimada_llegada\" FROM reservations WHERE code = ?",
                 LocalTime.class, codigo)).isEqualTo(LocalTime.parse(hora));
         entityManager.clear();
         detalle(codigo).andExpect(status().isOk())
@@ -89,7 +89,7 @@ class HoraEstimadaLlegadaIntegrationTest {
         Map<String, Object> body = peticion(oferta);
         if (explicita) body.put("horaEstimadaLlegada", null);
         String codigo = codigo(crear(oferta, body, intento(body)));
-        assertThat(jdbc.queryForObject("SELECT hora_estimada_llegada FROM reservas WHERE codigo = ?",
+        assertThat(jdbc.queryForObject("SELECT estimated_arrival_time AS \"hora_estimada_llegada\" FROM reservations WHERE code = ?",
                 LocalTime.class, codigo)).isNull();
         detalle(codigo).andExpect(status().isOk())
                 .andExpect(jsonPath("$.horaEstimadaLlegada").value(nullValue()));
@@ -107,11 +107,11 @@ class HoraEstimadaLlegadaIntegrationTest {
         Map<String, Object> body = peticion(oferta);
         body.put("horaEstimadaLlegada", hora);
         Intento intento = intento(body);
-        int anteriores = jdbc.queryForObject("SELECT count(*) FROM reservas", Integer.class);
+        int anteriores = jdbc.queryForObject("SELECT count(*)  FROM reservations", Integer.class);
         crear(oferta, body, intento).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("DATOS_INVALIDOS"))
                 .andExpect(jsonPath("$.detalles[*].campo", hasItem("horaEstimadaLlegada")));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM reservas", Integer.class)).isEqualTo(anteriores);
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM reservations", Integer.class)).isEqualTo(anteriores);
         body.put("horaEstimadaLlegada", "18:30");
         codigo(crear(oferta, body, intento));
     }
@@ -127,7 +127,7 @@ class HoraEstimadaLlegadaIntegrationTest {
         body.put("horaEstimadaLlegada", "19:00");
         crear(oferta, body, intento).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("BOOKING_REQUEST_CONFLICT"));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM reservas WHERE codigo = ?", Integer.class, codigo))
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM reservations WHERE code = ?", Integer.class, codigo))
                 .isEqualTo(1);
         detalle(codigo).andExpect(jsonPath("$.horaEstimadaLlegada").value("18:30"));
     }
@@ -143,7 +143,7 @@ class HoraEstimadaLlegadaIntegrationTest {
         Object huellaAnterior = oferta ? Map.of("slug", slug(), "reserva", anterior) : anterior;
         String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
                 .digest(json.writeValueAsString(huellaAnterior).getBytes(StandardCharsets.UTF_8)));
-        jdbc.update("UPDATE reservas_solicitudes SET huella = ? WHERE clave = ?", hash, intento.clave());
+        jdbc.update("UPDATE reservation_requests SET fingerprint = ? WHERE key = ?", hash, intento.clave());
         body.put("horaEstimadaLlegada", null);
         assertThat(codigo(crear(oferta, body, intento))).isEqualTo(codigo);
     }
@@ -165,24 +165,24 @@ class HoraEstimadaLlegadaIntegrationTest {
         String codigo = codigo(crear(false, body, intento(body)));
         // Copia temporal de una fila real con la estructura anterior a V28.
         // Solo vive en esta conexión/transacción; no altera el esquema de las demás pruebas.
-        jdbc.execute("CREATE TEMP TABLE reservas ON COMMIT DROP AS SELECT * FROM public.reservas");
-        jdbc.execute("ALTER TABLE reservas DROP COLUMN hora_estimada_llegada");
-        String antes = jdbc.queryForObject("SELECT to_jsonb(r)::text FROM reservas r WHERE codigo = ?",
+        jdbc.execute("CREATE TEMP TABLE reservations ON COMMIT DROP AS SELECT * FROM public.reservations");
+        jdbc.execute("ALTER TABLE reservations DROP COLUMN estimated_arrival_time");
+        String antes = jdbc.queryForObject("SELECT to_jsonb(r)::text  FROM reservations r WHERE code = ?",
                 String.class, codigo);
-        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V28__hora_estimada_llegada.sql"))
+        new ResourceDatabasePopulator(new ClassPathResource("db/migration/V28__estimated_arrival_time.sql"))
                 .execute(dataSource);
-        assertThat(jdbc.queryForObject("SELECT (to_jsonb(r) - 'hora_estimada_llegada')::text "
-                + "FROM reservas r WHERE codigo = ?", String.class, codigo)).isEqualTo(antes);
-        assertThat(jdbc.queryForObject("SELECT hora_estimada_llegada FROM reservas WHERE codigo = ?",
+        assertThat(jdbc.queryForObject("SELECT (to_jsonb(r) - 'estimated_arrival_time')::text "
+                + "FROM reservations r WHERE code = ?", String.class, codigo)).isEqualTo(antes);
+        assertThat(jdbc.queryForObject("SELECT estimated_arrival_time AS \"hora_estimada_llegada\" FROM reservations WHERE code = ?",
                 LocalTime.class, codigo)).isNull();
-        assertThat(jdbc.queryForObject("SELECT column_default FROM information_schema.columns "
+        assertThat(jdbc.queryForObject("SELECT column_default  FROM information_schema.columns "
                 + "WHERE table_schema = (SELECT nspname FROM pg_namespace WHERE oid = pg_my_temp_schema()) "
-                + "AND table_name = 'reservas' AND column_name = 'hora_estimada_llegada'", String.class)).isNull();
+                + "AND table_name = 'reservations' AND column_name = 'estimated_arrival_time'", String.class)).isNull();
     }
 
     private Map<String, Object> peticion(boolean oferta) {
-        Long tipo = jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = 'Estándar Jardín'", Long.class);
-        if (oferta) tipo = jdbc.queryForObject("SELECT tipo_habitacion_id FROM catalogo_ofertas WHERE slug = ?",
+        Long tipo = jdbc.queryForObject("SELECT id  FROM room_types WHERE name = 'Estándar Jardín'", Long.class);
+        if (oferta) tipo = jdbc.queryForObject("SELECT room_type_id AS \"tipo_habitacion_id\" FROM catalog_offers WHERE slug = ?",
                 Long.class, slug());
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("tipoHabitacionId", tipo);
@@ -195,7 +195,7 @@ class HoraEstimadaLlegadaIntegrationTest {
     }
 
     private String slug() {
-        return jdbc.queryForObject("SELECT slug FROM catalogo_ofertas ORDER BY orden LIMIT 1", String.class);
+        return jdbc.queryForObject("SELECT slug  FROM catalog_offers ORDER BY sort_order LIMIT 1", String.class);
     }
 
     private ResultActions crear(boolean oferta, Map<String, Object> body, Intento intento) throws Exception {
@@ -222,8 +222,8 @@ class HoraEstimadaLlegadaIntegrationTest {
         new java.security.SecureRandom().nextBytes(azar);
         String comprobante = Base64.getUrlEncoder().withoutPadding().encodeToString(azar);
         jdbc.update("""
-                INSERT INTO reserva_correo_verificaciones (id, correo, borrador, codigo_hash, creado_en, expira_en,
-                    verificado_en, comprobante_hash, comprobante_expira_en)
+                INSERT INTO reservation_email_verifications (id, email, draft, code_hash, created_at, expires_at,
+                    verified_at, proof_hash, proof_expires_at)
                 VALUES (?, ?, ?, 'NO_APLICA', ?, ?, ?, encode(sha256(convert_to(?, 'UTF8')), 'hex'), ?)
                 """, UUID.randomUUID(), ((Map<?, ?>) body.get("huesped")).get("correo"), borrador,
                 Timestamp.from(RelojFijoConfig.AHORA), Timestamp.from(RelojFijoConfig.AHORA.plusSeconds(600)),

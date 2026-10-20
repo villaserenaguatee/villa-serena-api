@@ -16,7 +16,7 @@ public class PerfilHuespedController {
  @GetMapping("/api/v1/app/perfil")
  @PreAuthorize("hasRole('HUESPED')")
  public Map<String,Object> perfil(){
-  var rows=jdbc.queryForList("SELECT id,nombre_completo AS \"nombreCompleto\",correo,telefono,nacionalidad,tipo_documento AS \"tipoDocumento\",numero_documento AS \"numeroDocumento\",pais_emisor_pasaporte AS \"paisEmisorPasaporte\",creado_en AS \"creadoEn\" FROM huespedes WHERE id=?",UsuarioActual.id());
+  var rows=jdbc.queryForList("SELECT id,full_name AS \"nombreCompleto\",email AS \"correo\",phone AS \"telefono\",nationality AS \"nacionalidad\",document_type AS \"tipoDocumento\",document_number AS \"numeroDocumento\",passport_issuing_country AS \"paisEmisorPasaporte\",created_at AS \"creadoEn\"  FROM guests WHERE id=?",UsuarioActual.id());
   return rows.stream().findFirst().orElseThrow(ApiException::noEncontrado);
  }
 }

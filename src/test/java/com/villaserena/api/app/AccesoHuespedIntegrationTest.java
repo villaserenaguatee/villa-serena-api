@@ -73,9 +73,9 @@ class AccesoHuespedIntegrationTest {
         reloj.reiniciar();
         ipCliente = "198.51.100." + (CLIENTES.incrementAndGet() % 250 + 1);
         long recepcionista = jdbc.queryForObject(
-                "SELECT id FROM empleados WHERE correo = 'ana.perez@villaserena.test'", Long.class);
+                "SELECT id  FROM employees WHERE email = 'ana.perez@villaserena.test'", Long.class);
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Ana Morales', 'acceso.ana@correo.test', '+502 5555 3333', 'Guatemalteca', 'DPI',
                         '3333333333333') RETURNING id""", Long.class);
         Reserva reserva = reservaService.crear(SolicitudReserva.recepcion(huespedId, 1L,
@@ -114,8 +114,8 @@ class AccesoHuespedIntegrationTest {
     /** El código real solo existe en el correo encolado: la base guarda su hash. */
     private String codigoDelCorreo() {
         return jdbc.queryForObject("""
-                SELECT payload ->> 'codigo' FROM outbox
-                WHERE tipo = 'CORREO_OTP' AND destinatario = 'acceso.ana@correo.test'
+                SELECT payload ->> 'codigo'  FROM outbox
+                WHERE type = 'CORREO_OTP' AND recipient = 'acceso.ana@correo.test'
                 ORDER BY id DESC LIMIT 1""", String.class);
     }
 
@@ -145,7 +145,7 @@ class AccesoHuespedIntegrationTest {
         String codigo = codigoDelCorreo();
         assertThat(codigo).matches("^[0-9]{6}$");
         // En la base solo está el hash, nunca el código.
-        assertThat(jdbc.queryForObject("SELECT codigo_hash FROM codigos_otp WHERE huesped_id = ?", String.class,
+        assertThat(jdbc.queryForObject("SELECT code_hash AS \"codigo_hash\" FROM otp_codes WHERE guest_id = ?", String.class,
                 huespedId)).isNotEqualTo(codigo).startsWith("$2");
     }
 
@@ -158,15 +158,15 @@ class AccesoHuespedIntegrationTest {
 
         // Huésped que existe pero no tiene reservas.
         jdbc.update("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Sin Reservas', 'sin.reservas@correo.test', '+502 0', 'Guatemalteca', 'DPI', '8')""");
         solicitar("sin.reservas@correo.test")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mensaje").value(AccesoHuespedService.MENSAJE_GENERICO));
 
         // Ninguno de los dos genera código ni correo.
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM codigos_otp", Integer.class)).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM outbox WHERE tipo = 'CORREO_OTP'", Integer.class))
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM otp_codes", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM outbox WHERE type = 'CORREO_OTP'", Integer.class))
                 .isZero();
     }
 
@@ -182,7 +182,7 @@ class AccesoHuespedIntegrationTest {
                 .andExpect(jsonPath("$.expiraEn").value(900));
 
         assertThat(jdbc.queryForObject(
-                "SELECT count(*) FROM refresh_tokens WHERE huesped_id = ? AND revocado_en IS NULL", Integer.class,
+                "SELECT count(*)  FROM refresh_tokens WHERE guest_id = ? AND revoked_at IS NULL", Integer.class,
                 huespedId)).isEqualTo(1);
     }
 
@@ -250,7 +250,7 @@ class AccesoHuespedIntegrationTest {
                 .andReturn().getResponse().getContentAsString();
         String acceso = "Bearer " + JsonPath.read(respuesta, "$.accessToken");
         String refresh = JsonPath.read(respuesta, "$.refreshToken");
-        jdbc.update("INSERT INTO dispositivos_push (huesped_id, token_expo) VALUES (?, ?)",
+        jdbc.update("INSERT INTO push_devices (guest_id, expo_token) VALUES (?, ?)",
                 huespedId, "ExponentPushToken[cerrar]");
 
         mvc.perform(post("/api/v1/app/cerrar-sesion").header("Authorization", acceso)
@@ -259,9 +259,9 @@ class AccesoHuespedIntegrationTest {
                 .andExpect(status().isOk());
 
         assertThat(jdbc.queryForObject(
-                "SELECT count(*) FROM refresh_tokens WHERE huesped_id = ? AND revocado_en IS NULL", Integer.class,
+                "SELECT count(*)  FROM refresh_tokens WHERE guest_id = ? AND revoked_at IS NULL", Integer.class,
                 huespedId)).isZero();
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM dispositivos_push WHERE huesped_id = ?", Integer.class,
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM push_devices WHERE guest_id = ?", Integer.class,
                 huespedId)).isZero();
     }
 
@@ -291,9 +291,9 @@ class AccesoHuespedIntegrationTest {
     @Test
     void unaReservaAjenaResponde404() throws Exception {
         long recepcionista = jdbc.queryForObject(
-                "SELECT id FROM empleados WHERE correo = 'ana.perez@villaserena.test'", Long.class);
+                "SELECT id  FROM employees WHERE email = 'ana.perez@villaserena.test'", Long.class);
         long otro = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Otro Huésped', 'otro.acceso@correo.test', '+502 1', 'Guatemalteca', 'DPI', '1')
                 RETURNING id""", Long.class);
         Reserva ajena = reservaService.crear(SolicitudReserva.recepcion(otro, 1L,
@@ -334,7 +334,7 @@ class AccesoHuespedIntegrationTest {
         mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .delete("/api/v1/app/dispositivos-push/{id}", id).header("Authorization", acceso))
                 .andExpect(status().isNoContent());
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM dispositivos_push WHERE id = ?", Integer.class, id))
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM push_devices WHERE id = ?", Integer.class, id))
                 .isZero();
     }
 

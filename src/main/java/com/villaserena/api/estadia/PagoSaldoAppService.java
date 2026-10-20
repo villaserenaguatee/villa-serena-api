@@ -79,7 +79,7 @@ public class PagoSaldoAppService {
     /** @return la sesión de pago, o vacío si el saldo ya es 0 (no se crea sesión). */
     @Transactional
     public Optional<PagoIniciado> iniciar(Reserva reserva) {
-        String estado=jdbc.queryForObject("SELECT estado FROM reservas WHERE id=? FOR UPDATE",String.class,reserva.getId());
+        String estado=jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE id=? FOR UPDATE",String.class,reserva.getId());
         if (!"EN_ESTADIA".equals(estado)) {
             throw ApiException.conflicto("ESTADO_INVALIDO", "Solo se paga el saldo durante la estadía.");
         }

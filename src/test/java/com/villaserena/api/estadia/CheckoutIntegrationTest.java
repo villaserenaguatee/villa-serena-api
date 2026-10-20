@@ -90,11 +90,11 @@ class CheckoutIntegrationTest {
         recepcionistaId = empleados.findByCorreoIgnoreCase("ana.perez@villaserena.test").orElseThrow().getId();
         recepcion = tokenEmpleado();
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Carla Salida', 'carla@correo.test', '+502 5555 4444', 'Guatemalteca', 'DPI', '4444444440101')
                 RETURNING id""", Long.class);
-        habitacionId = jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = '101'", Long.class);
-        long tipo = jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = 'Estándar Jardín'", Long.class);
+        habitacionId = jdbc.queryForObject("SELECT id  FROM rooms WHERE number = '101'", Long.class);
+        long tipo = jdbc.queryForObject("SELECT id  FROM room_types WHERE name = 'Estándar Jardín'", Long.class);
         // Lunes 5 a miércoles 7 de octubre: 650 + 650 = 1300.00.
         Reserva reserva = reservaService.crear(SolicitudReserva.recepcion(huespedId, tipo, LocalDate.parse("2026-10-05"),
                 LocalDate.parse("2026-10-07"), 1, habitacionId, recepcionistaId));
@@ -136,8 +136,8 @@ class CheckoutIntegrationTest {
     @Test
     void elAlojamientoNoSeAnula() throws Exception {
         Long alojamiento = jdbc.queryForObject("""
-                SELECT c.id FROM cargos c JOIN cuentas cu ON cu.id = c.cuenta_id
-                JOIN reservas r ON r.id = cu.reserva_id WHERE r.codigo = ? AND c.tipo = 'ALOJAMIENTO'""",
+                SELECT c.id  FROM charges c JOIN accounts cu ON cu.id = c.account_id
+                JOIN reservations r ON r.id = cu.reservation_id WHERE r.code = ? AND c.type = 'ALOJAMIENTO'""",
                 Long.class, codigo);
         mvc.perform(post("/api/v1/cuentas/{c}/cargos/{id}/anular", codigo, alojamiento)
                         .header("Authorization", recepcion)
@@ -155,7 +155,7 @@ class CheckoutIntegrationTest {
                 .andExpect(jsonPath("$.cargos[0].responsable").doesNotExist());
 
         long otro = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Otro', 'otro@correo.test', '+502 1', 'Guatemalteca', 'DPI', '1') RETURNING id""", Long.class);
         mvc.perform(get("/api/v1/app/reservas/{c}/cuenta", codigo).header("Authorization", tokenHuesped(otro)))
                 .andExpect(status().isNotFound());
@@ -166,9 +166,9 @@ class CheckoutIntegrationTest {
     @Test
     void checkoutDeRecepcionConEfectivo() throws Exception {
         long pedido = jdbc.queryForObject(
-                "INSERT INTO pedidos (reserva_id, estado) SELECT id, 'NUEVO' FROM reservas WHERE codigo = ? RETURNING id",
+                "INSERT INTO orders (reservation_id, status) SELECT id, 'NUEVO' FROM reservations WHERE code = ? RETURNING id",
                 Long.class, codigo);
-        jdbc.update("INSERT INTO dispositivos_push (huesped_id, token_expo) VALUES (?, 'ExponentPushToken[x]')",
+        jdbc.update("INSERT INTO push_devices (guest_id, expo_token) VALUES (?, 'ExponentPushToken[x]')",
                 huespedId);
 
         checkoutRecepcion("CF", "{\"metodo\": \"EFECTIVO\", \"referencia\": \"Caja 1\"}")
@@ -178,16 +178,16 @@ class CheckoutIntegrationTest {
                 .andExpect(jsonPath("$.saldo").value(0.00))
                 .andExpect(jsonPath("$.factura.serie").value("VS-A"));
 
-        assertThat(jdbc.queryForMap("SELECT ocupacion, condicion FROM habitaciones WHERE id = ?", habitacionId))
+        assertThat(jdbc.queryForMap("SELECT occupancy AS \"ocupacion\", condition AS \"condicion\" FROM rooms WHERE id = ?", habitacionId))
                 .containsEntry("ocupacion", "LIBRE").containsEntry("condicion", "SUCIA");
         assertThat(jdbc.queryForMap("""
-                SELECT p.metodo, p.monto, p.referencia FROM pagos p JOIN cuentas c ON c.id = p.cuenta_id
-                JOIN reservas r ON r.id = c.reserva_id WHERE r.codigo = ?""", codigo))
+                SELECT p.method AS "metodo", p.amount AS "monto", p.reference AS "referencia" FROM payments p JOIN accounts c ON c.id = p.account_id
+                JOIN reservations r ON r.id = c.reservation_id WHERE r.code = ?""", codigo))
                 .containsEntry("metodo", "EFECTIVO").containsEntry("referencia", "Caja 1")
                 .satisfies(m -> assertThat((BigDecimal) m.get("monto")).isEqualByComparingTo("1300.00"));
-        assertThat(jdbc.queryForObject("SELECT estado FROM pedidos WHERE id = ?", String.class, pedido))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM orders WHERE id = ?", String.class, pedido))
                 .isEqualTo("CANCELADO");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM dispositivos_push WHERE huesped_id = ?", Integer.class,
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM push_devices WHERE guest_id = ?", Integer.class,
                 huespedId)).isZero();
     }
 
@@ -195,16 +195,16 @@ class CheckoutIntegrationTest {
     void conIncidenciaQueImpideElUsoQuedaFueraDeServicio() throws Exception {
         long empleado = empleados.findByCorreoIgnoreCase("marta.xicara@villaserena.test").orElseThrow().getId();
         jdbc.update("""
-                INSERT INTO incidencias (habitacion_id, descripcion, impide_uso, reportada_por_empleado_id)
+                INSERT INTO incidents (room_id, description, blocks_use, reported_by_employee_id)
                 VALUES (?, 'Fuga en el baño', TRUE, ?)""", habitacionId, empleado);
         checkoutRecepcion("CF", "{\"metodo\": \"TARJETA\"}").andExpect(status().isOk());
-        assertThat(jdbc.queryForObject("SELECT condicion FROM habitaciones WHERE id = ?", String.class, habitacionId))
+        assertThat(jdbc.queryForObject("SELECT condition AS \"condicion\" FROM rooms WHERE id = ?", String.class, habitacionId))
                 .isEqualTo("FUERA_DE_SERVICIO");
     }
 
     @Test
     void noSeHaceCheckoutConUnPedidoEnCamino() throws Exception {
-        jdbc.update("INSERT INTO pedidos (reserva_id, estado) SELECT id, 'EN_CAMINO' FROM reservas WHERE codigo = ?",
+        jdbc.update("INSERT INTO orders (reservation_id, status) SELECT id, 'EN_CAMINO' FROM reservations WHERE code = ?",
                 codigo);
         mvc.perform(get("/api/v1/checkout/{c}", codigo).header("Authorization", recepcion))
                 .andExpect(jsonPath("$.pedidoEnCamino").value(true))
@@ -277,7 +277,7 @@ class CheckoutIntegrationTest {
         mvc.perform(get(ruta)).andExpect(status().isUnauthorized());
         mvc.perform(get(ruta).header("Authorization", recepcion)).andExpect(status().isForbidden());
         long otroHuesped = jdbc.queryForObject("""
-                INSERT INTO huespedes(nombre_completo,correo,telefono,tipo_documento,numero_documento)
+                INSERT INTO guests(full_name,email,phone,document_type,document_number)
                 VALUES('Otro huésped','otro-saldo@correo.test','+502 5555 0001','DPI','1234567890102') RETURNING id
                 """, Long.class);
         mvc.perform(get(ruta).header("Authorization", tokenHuesped(otroHuesped)))
@@ -287,7 +287,7 @@ class CheckoutIntegrationTest {
         reloj.fijar(SALIDA_10AM);
         mvc.perform(get(ruta).header("Authorization", huesped))
                 .andExpect(jsonPath("$.accionPago").value("INICIAR"));
-        jdbc.update("INSERT INTO pedidos (reserva_id,estado) SELECT id,'EN_CAMINO' FROM reservas WHERE codigo=?", codigo);
+        jdbc.update("INSERT INTO orders (reservation_id,status) SELECT id,'EN_CAMINO' FROM reservations WHERE code=?", codigo);
         mvc.perform(get(ruta).header("Authorization", huesped))
                 .andExpect(jsonPath("$.accionPago").value("NINGUNA"));
     }
