@@ -63,7 +63,7 @@ jobs:
           # SSM command values passed as JSON; files transferred as base64 to
           # avoid depending on any public SSH endpoint.
           python3 - <<'PY'
-          import base64, json, os, subprocess
+          import base64, json, os, subprocess, time
           compose = base64.b64encode(open("compose.prod.yml", "rb").read()).decode()
           deploy = base64.b64encode(open("scripts/deploy-ec2.sh", "rb").read()).decode()
           # Paths and values come from trusted workflow configuration.
@@ -83,19 +83,52 @@ jobs:
                "--parameters", payload,
                "--region", os.environ["REGION"],
                "--query", "Command.CommandId", "--output", "text"], text=True).strip()
-          # Waiter failure is handled by checking the final invocation status.
-          subprocess.run(["aws", "ssm", "wait", "command-executed",
-                          "--command-id", command_id,
-                          "--instance-id", os.environ["INSTANCE_ID"],
-                          "--region", os.environ["REGION"]], check=False)
-          info = json.loads(subprocess.check_output(
-              ["aws", "ssm", "get-command-invocation",
-               "--command-id", command_id,
-               "--instance-id", os.environ["INSTANCE_ID"],
-               "--region", os.environ["REGION"], "--output", "json"], text=True))
-          print("SSM status:", info["Status"])
-          # Print errors but never emit script output containing secrets.
-          if info["Status"] != "Success":
-              print(info.get("StandardErrorContent", "")[-2000:])
+          print(f"Dispatched SSM command {command_id}. Polling for completion...")
+
+          terminal_statuses = {"Success", "Failed", "Cancelled", "TimedOut", "Cancelling"}
+          max_timeout_seconds = 900
+          poll_interval = 10
+          elapsed = 0
+          info = None
+
+          while elapsed < max_timeout_seconds:
+              time.sleep(poll_interval)
+              elapsed += poll_interval
+              try:
+                  info_raw = subprocess.check_output(
+                      ["aws", "ssm", "get-command-invocation",
+                       "--command-id", command_id,
+                       "--instance-id", os.environ["INSTANCE_ID"],
+                       "--region", os.environ["REGION"], "--output", "json"], text=True)
+                  info = json.loads(info_raw)
+                  status = info.get("Status", "Unknown")
+                  print(f"[{elapsed}s] SSM Status: {status}")
+                  if status in terminal_statuses:
+                      break
+              except subprocess.CalledProcessError:
+                  print(f"[{elapsed}s] Waiting for SSM invocation to become ready...")
+
+          if not info:
+              print(f"Deployment timed out after {max_timeout_seconds}s waiting for SSM response.")
+              raise SystemExit(1)
+
+          status = info.get("Status", "Unknown")
+          print(f"Final SSM Execution Status: {status}")
+
+          stdout = info.get("StandardOutputContent", "").strip()
+          stderr = info.get("StandardErrorContent", "").strip()
+
+          if status == "Success":
+              print("=== DEPLOYMENT OUTPUT ===")
+              if stdout:
+                  print(stdout[-4000:])
+          else:
+              print(f"=== DEPLOYMENT FAILED (Status: {status}) ===")
+              if stderr:
+                  print("--- STDERR ---")
+                  print(stderr[-4000:])
+              if stdout:
+                  print("--- STDOUT ---")
+                  print(stdout[-4000:])
               raise SystemExit(1)
           PY
