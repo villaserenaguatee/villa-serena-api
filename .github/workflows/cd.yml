@@ -3,37 +3,20 @@ name: API CD to EC2
 on:
   workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write
-  packages: write
-
 concurrency:
   group: villa-serena-api-production
   cancel-in-progress: false
 
 jobs:
-  build-push-deploy:
+  build-and-push:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Java 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-          cache: maven
-      - name: Verify application before deployment
-        run: |
-          chmod +x mvnw
-          ./mvnw -B verify
-      - name: AWS credentials (GitHub OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_API_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
       - name: Authenticate to GHCR
         uses: docker/login-action@v3
         with:
@@ -51,7 +34,23 @@ jobs:
           tags: ghcr.io/villaserenaguatee/villa-serena-api:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Deploy API only via SSM Run Command
+
+  deploy-to-ec2:
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: AWS credentials (GitHub OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_API_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Deploy API via SSM Run Command
         env:
           INSTANCE_ID: ${{ vars.AWS_EC2_INSTANCE_ID }}
           REGION: ${{ vars.AWS_REGION }}

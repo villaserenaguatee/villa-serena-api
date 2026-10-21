@@ -68,4 +68,7 @@ echo "--- Docker Compose Status ---" >&2
 docker compose -p villa-serena-api -f compose.yml ps >&2
 echo "--- Recent Application Logs (last 50 lines) ---" >&2
 docker compose -p villa-serena-api -f compose.yml logs --tail=50 api >&2
+echo "Stopping and removing failed container to prevent restart loops..." >&2
+docker compose -p villa-serena-api -f compose.yml stop api >&2 2>/dev/null || true
+docker compose -p villa-serena-api -f compose.yml rm -f api >&2 2>/dev/null || true
 exit 1
