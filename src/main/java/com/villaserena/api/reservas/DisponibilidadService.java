@@ -117,11 +117,10 @@ public class DisponibilidadService {
     }
 
     private static final String SELECT_TIPO = """
-            SELECT id, nombre, descripcion, capacidad, precio_base, ajuste_fin_semana_pct, estado
-            FROM tipos_habitacion""";
+            SELECT id, name AS "nombre", description AS "descripcion", capacity AS "capacidad", base_price AS "precio_base", weekend_adjustment_pct AS "ajuste_fin_semana_pct", status AS "estado" FROM room_types""";
 
     private List<TipoHabitacionInfo> tiposActivos() {
-        return jdbc.query(SELECT_TIPO + " WHERE estado = 'ACTIVO' ORDER BY precio_base, id", (rs, i) -> mapear(rs));
+        return jdbc.query(SELECT_TIPO + " WHERE status = 'ACTIVO' ORDER BY base_price, id", (rs, i) -> mapear(rs));
     }
 
     private static TipoHabitacionInfo mapear(java.sql.ResultSet rs) throws java.sql.SQLException {
@@ -133,26 +132,26 @@ public class DisponibilidadService {
     /** Cupo mínimo de cada tipo en las noches del rango. Si {@code tipoId} no es nulo, solo ese tipo. */
     private Map<Long, Integer> cuposPorTipo(LocalDate entrada, LocalDate salida, Long tipoId) {
         String sql = """
-                WITH noches AS (
+                WITH nights AS (
                     SELECT generate_series(?::date, ?::date - 1, interval '1 day')::date AS d
                 ),
-                capacidad AS (
-                    SELECT tipo_habitacion_id AS tipo, count(*) AS n
-                    FROM habitaciones
-                    WHERE estado = 'ACTIVO' AND condicion <> 'FUERA_DE_SERVICIO'
-                    GROUP BY tipo_habitacion_id
+                capacity AS (
+                    SELECT room_type_id AS type, count(*) AS n
+                    FROM rooms
+                    WHERE status = 'ACTIVO' AND condition <> 'FUERA_DE_SERVICIO'
+                    GROUP BY room_type_id
                 ),
-                ocupadas AS (
-                    SELECT r.tipo_habitacion_id AS tipo, n.d, count(*) AS c
-                    FROM reservas r
-                    JOIN noches n ON r.fecha_entrada <= n.d AND r.fecha_salida > n.d
-                    WHERE r.estado IN ('PENDIENTE_PAGO', 'CONFIRMADA', 'EN_ESTADIA')
-                    GROUP BY r.tipo_habitacion_id, n.d
+                occupied AS (
+                    SELECT r.room_type_id AS type, n.d, count(*) AS c
+                    FROM reservations r
+                    JOIN nights n ON r.checkin_date <= n.d AND r.checkout_date > n.d
+                    WHERE r.status IN ('PENDIENTE_PAGO', 'CONFIRMADA', 'EN_ESTADIA')
+                    GROUP BY r.room_type_id, n.d
                 )
                 SELECT t.id,
-                       coalesce(c.n, 0) - coalesce((SELECT max(o.c) FROM ocupadas o WHERE o.tipo = t.id), 0) AS cupo
-                FROM tipos_habitacion t
-                LEFT JOIN capacidad c ON c.tipo = t.id
+                       coalesce(c.n, 0) - coalesce((SELECT max(o.c) FROM occupied o WHERE o.type = t.id), 0) AS available_count
+                FROM room_types t
+                LEFT JOIN capacity c ON c.type = t.id
                 WHERE (?::bigint IS NULL OR t.id = ?::bigint)""";
         return jdbc.query(sql, (rs, i) -> Map.entry(rs.getLong(1), rs.getInt(2)), entrada, salida, tipoId, tipoId)
                 .stream()
@@ -161,8 +160,8 @@ public class DisponibilidadService {
 
     private Map<Long, List<String>> fotosPorTipo() {
         return jdbc.query("""
-                SELECT tipo_habitacion_id, clave_objeto FROM fotos_tipo_habitacion
-                ORDER BY tipo_habitacion_id, es_principal DESC, orden, id""",
+                SELECT room_type_id AS "tipo_habitacion_id", object_key AS "clave_objeto" FROM room_type_photos
+                ORDER BY room_type_id, is_primary DESC, sort_order, id""",
                 (rs, i) -> Map.entry(rs.getLong(1), urlPublica + "/" + rs.getString(2)))
                 .stream()
                 .collect(Collectors.groupingBy(Map.Entry::getKey,

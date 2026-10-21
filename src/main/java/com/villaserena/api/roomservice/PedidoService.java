@@ -280,7 +280,7 @@ public class PedidoService {
     private void encolarPush(Pedido pedido) {
         Reserva reserva = reservas.findById(pedido.getReservaId()).orElseThrow();
         List<String> tokens = jdbc.queryForList(
-                "SELECT token_expo FROM dispositivos_push WHERE huesped_id = ?", String.class,
+                "SELECT expo_token AS \"token_expo\" FROM push_devices WHERE guest_id = ?", String.class,
                 reserva.getHuespedId());
         for (String token : tokens) {
             outbox.encolar(TipoNotificacion.PUSH_PEDIDO_ENTREGADO, token,
@@ -296,9 +296,8 @@ public class PedidoService {
 
     private List<ItemPedido> items(long pedidoId) {
         return jdbc.query("""
-                SELECT pi.item_menu_id, im.nombre, pi.cantidad, pi.precio_unitario
-                FROM pedido_items pi JOIN items_menu im ON im.id = pi.item_menu_id
-                WHERE pi.pedido_id = ? ORDER BY pi.id""",
+                SELECT pi.menu_item_id AS "item_menu_id", im.name AS "nombre", pi.quantity AS "cantidad", pi.unit_price AS "precio_unitario" FROM order_items pi JOIN menu_items im ON im.id = pi.menu_item_id
+                WHERE pi.order_id = ? ORDER BY pi.id""",
                 (rs, i) -> linea(rs), pedidoId);
     }
 
@@ -333,10 +332,9 @@ public class PedidoService {
     private PedidoRoomService paraRoomService(Pedido pedido) {
         List<ItemPedido> items = items(pedido.getId());
         Datos datos = jdbc.query("""
-                SELECT hu.nombre_completo, ha.id, ha.numero, ha.piso
-                FROM reservas r
-                JOIN huespedes hu ON hu.id = r.huesped_id
-                LEFT JOIN habitaciones ha ON ha.id = r.habitacion_id
+                SELECT hu.full_name AS "nombre_completo", ha.id, ha.number AS "numero", ha.floor AS "piso" FROM reservations r
+                JOIN guests hu ON hu.id = r.guest_id
+                LEFT JOIN rooms ha ON ha.id = r.room_id
                 WHERE r.id = ?""",
                 (rs, i) -> new Datos(rs.getString(1), (Long) rs.getObject(2), rs.getString(3),
                         (Integer) rs.getObject(4)),

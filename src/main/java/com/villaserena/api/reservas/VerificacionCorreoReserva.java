@@ -35,7 +35,7 @@ public class VerificacionCorreoReserva {
     private static Timestamp ts(Instant instant) { return Timestamp.from(instant); }
     private static ApiException invalido() { return new ApiException(HttpStatus.UNAUTHORIZED,"VERIFICACION_INVALIDA","El código no es válido o venció. Revisa el código y vuelve a intentarlo."); }
     private static ApiException limite() { return new ApiException(HttpStatus.TOO_MANY_REQUESTS,"VERIFICACION_LIMITE","Espera antes de solicitar o probar otro código."); }
-    private int fallos(String email,Instant now) { return jdbc.queryForObject("SELECT COALESCE(SUM(intentos),0)::int FROM reserva_correo_verificaciones WHERE correo=? AND origen='CODIGO' AND creado_en>?",Integer.class,email,ts(now.minusSeconds(900))); }
+    private int fallos(String email,Instant now) { return jdbc.queryForObject("SELECT COALESCE(SUM(attempts),0)::int  FROM reservation_email_verifications WHERE email=? AND source='CODIGO' AND created_at>?",Integer.class,email,ts(now.minusSeconds(900))); }
     private static String hash(String secret) {
         try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(secret.getBytes(StandardCharsets.UTF_8))); }
         catch(NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
@@ -47,49 +47,49 @@ public class VerificacionCorreoReserva {
         lock(old);
         Instant now=clock.instant();
         // Revoke this draft's previous proof/challenge, never another booking or sign-in OTP.
-        jdbc.update("UPDATE outbox SET estado='FALLIDO',ultimo_error='DESCARTADO_CAMBIO_CORREO',payload=payload-'codigo' WHERE estado='PENDIENTE' AND payload->>'proposito'='VERIFICAR_RESERVA' AND id IN (SELECT outbox_id FROM reserva_correo_verificaciones WHERE correo=? AND borrador=? AND consumido_en IS NULL)",old,draft);
-        jdbc.update("UPDATE reserva_correo_verificaciones SET expira_en=LEAST(expira_en,?),comprobante_hash=NULL,comprobante_expira_en=NULL WHERE correo=? AND borrador=? AND consumido_en IS NULL",ts(now),old,draft);
+        jdbc.update("UPDATE outbox SET status='FALLIDO',last_error='DESCARTADO_CAMBIO_CORREO',payload=payload-'codigo' WHERE status='PENDIENTE' AND payload->>'proposito'='VERIFICAR_RESERVA' AND id IN (SELECT outbox_id FROM reservation_email_verifications WHERE email=? AND draft=? AND consumed_at IS NULL)",old,draft);
+        jdbc.update("UPDATE reservation_email_verifications SET expires_at=LEAST(expires_at,?),proof_hash=NULL,proof_expires_at=NULL WHERE email=? AND draft=? AND consumed_at IS NULL",ts(now),old,draft);
         return Map.of("cambiado",true);
     }
     @Transactional
     public Map<String,Object> solicitar(String address,UUID draft,String name) {
         String email=correo(address); Instant now=clock.instant(); lock(email);
         // A retry of an unresolved send must reuse its outbox entry, not generate another code.
-        boolean pending=Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM reserva_correo_verificaciones v JOIN outbox o ON o.id=v.outbox_id WHERE v.correo=? AND v.borrador=? AND v.origen='CODIGO' AND v.verificado_en IS NULL AND v.expira_en>? AND o.estado='PENDIENTE')",Boolean.class,email,draft,ts(now)));
+        boolean pending=Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM reservation_email_verifications v JOIN outbox o ON o.id=v.outbox_id WHERE v.email=? AND v.draft=? AND v.source='CODIGO' AND v.verified_at IS NULL AND v.expires_at>? AND o.status='PENDIENTE')",Boolean.class,email,draft,ts(now)));
         if(pending) return Map.of("estado","SOLICITADO","envio","PENDIENTE","reenviarEn",60);
         if(fallos(email,now)>=5) throw limite();
-        int recent=jdbc.queryForObject("SELECT COUNT(*)::int FROM reserva_correo_verificaciones WHERE correo=? AND origen='CODIGO' AND creado_en>?",Integer.class,email,ts(now.minusSeconds(900)));
-        boolean cooldown=jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM reserva_correo_verificaciones WHERE correo=? AND origen='CODIGO' AND creado_en>?)",Boolean.class,email,ts(now.minusSeconds(60)));
+        int recent=jdbc.queryForObject("SELECT COUNT(*)::int  FROM reservation_email_verifications WHERE email=? AND source='CODIGO' AND created_at>?",Integer.class,email,ts(now.minusSeconds(900)));
+        boolean cooldown=jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM reservation_email_verifications WHERE email=? AND source='CODIGO' AND created_at>?)",Boolean.class,email,ts(now.minusSeconds(60)));
         if(cooldown || recent>=3) throw limite();
         String code=String.format(Locale.ROOT,"%06d",RANDOM.nextInt(1000000));
         String guest=name==null?"":name.trim(); if(guest.length()>150) throw ApiException.datosInvalidos("El nombre es demasiado largo.",List.of());
         var notice=outbox.encolar(TipoNotificacion.CORREO_OTP,email,Map.of("proposito","VERIFICAR_RESERVA","nombreHuesped",guest,"codigo",code,"minutos",10));
-        jdbc.update("INSERT INTO reserva_correo_verificaciones(id,correo,borrador,codigo_hash,creado_en,expira_en,outbox_id) VALUES(?,?,?,?,?,?,?)",UUID.randomUUID(),email,draft,encoder.encode(code),ts(now),ts(now.plusSeconds(600)),notice.getId());
+        jdbc.update("INSERT INTO reservation_email_verifications(id,email,draft,code_hash,created_at,expires_at,outbox_id) VALUES(?,?,?,?,?,?,?)",UUID.randomUUID(),email,draft,encoder.encode(code),ts(now),ts(now.plusSeconds(600)),notice.getId());
         return Map.of("estado","SOLICITADO","mensaje","Solicitud recibida. Revisa tu correo para verificarlo.","reenviarEn",60);
     }
     @Transactional(noRollbackFor=ApiException.class)
     public Map<String,Object> verificar(String address,UUID draft,String code) {
         String email=correo(address); Instant now=clock.instant(); lock(email);
         if(fallos(email,now)>=5) throw limite();
-        var rows=jdbc.queryForList("SELECT * FROM reserva_correo_verificaciones WHERE correo=? AND borrador=? AND origen='CODIGO' ORDER BY creado_en DESC LIMIT 1 FOR UPDATE",email,draft);
+        var rows=jdbc.queryForList("SELECT id,email AS \"correo\",draft AS \"borrador\",code_hash AS \"codigo_hash\",created_at AS \"creado_en\",expires_at AS \"expira_en\",attempts AS \"intentos\",verified_at AS \"verificado_en\",proof_hash AS \"comprobante_hash\",proof_expires_at AS \"comprobante_expira_en\",consumed_at AS \"consumido_en\",outbox_id,source AS \"origen\" FROM reservation_email_verifications WHERE email=? AND draft=? AND source='CODIGO' ORDER BY created_at DESC LIMIT 1 FOR UPDATE",email,draft);
         if(rows.isEmpty()) throw invalido();
         var row=rows.getFirst();
         if(row.get("verificado_en")!=null || !((Timestamp)row.get("expira_en")).toInstant().isAfter(now) || !encoder.matches(code,(String)row.get("codigo_hash"))) {
-            jdbc.update("UPDATE reserva_correo_verificaciones SET intentos=intentos+1 WHERE id=?",row.get("id")); throw invalido();
+            jdbc.update("UPDATE reservation_email_verifications SET attempts=attempts+1 WHERE id=?",row.get("id")); throw invalido();
         }
         byte[] bytes=new byte[32]; RANDOM.nextBytes(bytes); String receipt=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        jdbc.update("UPDATE reserva_correo_verificaciones SET verificado_en=?,comprobante_hash=?,comprobante_expira_en=? WHERE id=?",ts(now),hash(receipt),ts(now.plusSeconds(1800)),row.get("id"));
+        jdbc.update("UPDATE reservation_email_verifications SET verified_at=?,proof_hash=?,proof_expires_at=? WHERE id=?",ts(now),hash(receipt),ts(now.plusSeconds(1800)),row.get("id"));
         return Map.of("verificado",true,"comprobante",receipt,"expiraEn",1800);
     }
     @Transactional(readOnly=true)
     public boolean estado(String address,UUID draft,String receipt) {
         if(receipt==null || !receipt.matches("[A-Za-z0-9_-]{43}")) return false;
-        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM reserva_correo_verificaciones WHERE correo=? AND borrador=? AND comprobante_hash=? AND verificado_en IS NOT NULL AND consumido_en IS NULL AND comprobante_expira_en>?)",Boolean.class,correo(address),draft,hash(receipt),ts(clock.instant())));
+        return Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM reservation_email_verifications WHERE email=? AND draft=? AND proof_hash=? AND verified_at IS NOT NULL AND consumed_at IS NULL AND proof_expires_at>?)",Boolean.class,correo(address),draft,hash(receipt),ts(clock.instant())));
     }
     @Transactional(readOnly=true)
     public Map<String,Object> informacion(String address,UUID draft,String receipt) {
         boolean verified=estado(address,draft,receipt);String email=correo(address);Instant now=clock.instant();
-        var rows=jdbc.queryForList("SELECT v.creado_en,v.expira_en,o.estado AS envio FROM reserva_correo_verificaciones v JOIN outbox o ON o.id=v.outbox_id WHERE v.correo=? AND v.borrador=? AND v.origen='CODIGO' AND v.verificado_en IS NULL ORDER BY v.creado_en DESC LIMIT 1",email,draft);
+        var rows=jdbc.queryForList("SELECT v.created_at AS \"creado_en\",v.expires_at AS \"expira_en\",o.status AS envio  FROM reservation_email_verifications v JOIN outbox o ON o.id=v.outbox_id WHERE v.email=? AND v.draft=? AND v.source='CODIGO' AND v.verified_at IS NULL ORDER BY v.created_at DESC LIMIT 1",email,draft);
         boolean requested=!rows.isEmpty() && ((Timestamp)rows.getFirst().get("expira_en")).toInstant().isAfter(now);
         long wait=requested?Math.max(0,Duration.between(now,((Timestamp)rows.getFirst().get("creado_en")).toInstant().plusSeconds(60)).getSeconds()):0;
         String envio=requested?String.valueOf(rows.getFirst().get("envio")):"NINGUNO";
@@ -111,16 +111,34 @@ public class VerificacionCorreoReserva {
         String hosted=jwt.getClaimAsString("hd");
         if(!email.endsWith("@gmail.com") && (hosted==null || hosted.isBlank())) return Map.of("verificado",false);
         lock(email);Instant now=clock.instant();byte[] bytes=new byte[32];RANDOM.nextBytes(bytes);String receipt=Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-        jdbc.update("INSERT INTO reserva_correo_verificaciones(id,correo,borrador,codigo_hash,creado_en,expira_en,verificado_en,comprobante_hash,comprobante_expira_en,origen) VALUES(?,?,?,?,?,?,?,?,?,'GOOGLE')",UUID.randomUUID(),email,draft,"NO_APLICA_GOOGLE",ts(now),ts(now.plusSeconds(600)),ts(now),hash(receipt),ts(now.plusSeconds(1800)));
+        jdbc.update("INSERT INTO reservation_email_verifications(id,email,draft,code_hash,created_at,expires_at,verified_at,proof_hash,proof_expires_at,source) VALUES(?,?,?,?,?,?,?,?,?,'GOOGLE')",UUID.randomUUID(),email,draft,"NO_APLICA_GOOGLE",ts(now),ts(now.plusSeconds(600)),ts(now),hash(receipt),ts(now.plusSeconds(1800)));
         return Map.of("verificado",true,"comprobante",receipt,"expiraEn",1800);
     }
     @Transactional
-    public void consumir(String address,String draft,String receipt) {
+    public UUID consumir(String address,String draft,String receipt) {
         if(draft==null || receipt==null || !receipt.matches("[A-Za-z0-9_-]{43}")) throw requerida();
         final UUID draftId; try { draftId=UUID.fromString(draft); } catch(IllegalArgumentException e) { throw requerida(); }
         String email=correo(address); lock(email);
-        int changed=jdbc.update("UPDATE reserva_correo_verificaciones SET consumido_en=? WHERE correo=? AND borrador=? AND comprobante_hash=? AND verificado_en IS NOT NULL AND consumido_en IS NULL AND comprobante_expira_en>?",ts(clock.instant()),email,draftId,hash(receipt),ts(clock.instant()));
-        if(changed!=1) throw requerida();
+        var ids=jdbc.queryForList("UPDATE reservation_email_verifications SET consumed_at=? WHERE email=? AND draft=? AND proof_hash=? AND verified_at IS NOT NULL AND consumed_at IS NULL AND proof_expires_at>? RETURNING id",UUID.class,ts(clock.instant()),email,draftId,hash(receipt),ts(clock.instant()));
+        if(ids.size()!=1) throw requerida();
+        return ids.getFirst();
+    }
+    /** Admite renovar el comprobante para el mismo correo y borrador, sin consumirlo otra vez. */
+    @Transactional(readOnly=true)
+    public boolean autorizaRecuperacion(UUID original, String draft, String receipt) {
+        if (original == null || draft == null || receipt == null || !receipt.matches("[A-Za-z0-9_-]{43}")) return false;
+        final UUID draftId;
+        try { draftId=UUID.fromString(draft); } catch(IllegalArgumentException e) { return false; }
+        return Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM reservation_email_verifications original
+                    JOIN reservation_email_verifications actual
+                      ON actual.email=original.email AND actual.draft=original.draft
+                    WHERE original.id=? AND original.consumed_at IS NOT NULL
+                      AND actual.draft=? AND actual.proof_hash=?
+                      AND actual.verified_at IS NOT NULL AND actual.proof_expires_at>?
+                )
+                """, Boolean.class, original, draftId, hash(receipt), ts(clock.instant())));
     }
     private static ApiException requerida() { return new ApiException(HttpStatus.FORBIDDEN,"CORREO_NO_VERIFICADO","Verifica tu correo antes de crear la reserva."); }
 }

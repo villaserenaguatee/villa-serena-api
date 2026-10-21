@@ -12,11 +12,11 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Línea de un pedido (tabla {@code pedido_items}) con el precio congelado al
+ * Línea de un pedido (tabla {@code order_items}) con el precio congelado al
  * momento de pedir (RN-RS-006): si el menú cambia después, el pedido no cambia.
  */
 @Entity
-@Table(name = "pedido_items")
+@Table(name = "order_items")
 @Getter
 @Setter
 public class PedidoItem {
@@ -25,15 +25,15 @@ public class PedidoItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "pedido_id", nullable = false)
+    @Column(name = "order_id", nullable = false)
     private Long pedidoId;
 
-    @Column(name = "item_menu_id", nullable = false)
+    @Column(name = "menu_item_id", nullable = false)
     private Long itemMenuId;
 
-    @Column(nullable = false)
+    @Column(name = "quantity", nullable = false)
     private int cantidad;
 
-    @Column(name = "precio_unitario", nullable = false)
+    @Column(name = "unit_price", nullable = false)
     private BigDecimal precioUnitario;
 }

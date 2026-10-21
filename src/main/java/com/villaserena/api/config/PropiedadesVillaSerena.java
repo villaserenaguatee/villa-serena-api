@@ -14,7 +14,7 @@ public record PropiedadesVillaSerena(
         PrimerAdmin primerAdmin,
         String webUrl,
         Reservas reservas,
-        Stripe stripe,
+        Recurrente recurrente,
         Archivos archivos,
         Notificaciones notificaciones) {
 
@@ -27,24 +27,24 @@ public record PropiedadesVillaSerena(
     public record Login(int intentosMaximos, int bloqueoMinutos) {
     }
 
-    public record PrimerAdmin(String correo, String nombre, String contrasena) {
+    public record PrimerAdmin(boolean habilitado, String correo, String nombre, String contrasena) {
     }
 
     /** Plazo para pagar una reserva web antes de cancelarla (PAR-06). */
     public record Reservas(int minutosPago) {
     }
 
-    /** {@code urlRetornoApp}: a dónde vuelve Stripe después de pagar el saldo en la app. */
-    public record Stripe(String claveSecreta, String webhookSecreto, String urlRetornoApp) {
+    /** {@code urlRetornoApp}: a dónde vuelve Recurrente después de pagar el saldo en la app. */
+    public record Recurrente(String clavePublica, String claveSecreta, String webhookSecreto, String urlRetornoApp) {
     }
 
     /**
-     * Archivos en MinIO (API S3). {@code urlPublica}: base del bucket público (fotos del
+     * Archivos en R2 (desarrollo) o S3 (producción). {@code urlPublica}: base del bucket público (fotos del
      * hotel, tipos y menú). El bucket privado guarda las fotos de incidencias, que se
      * entregan con una URL firmada de {@code minutosUrlFirmada}.
      */
-    public record Archivos(String urlPublica, String endpoint, String usuario, String contrasena,
-            String bucketPrivado, int minutosUrlFirmada) {
+    public record Archivos(String urlPublica, String endpoint, String region, String usuario, String contrasena,
+            String bucketPrivado, int minutosUrlFirmada, boolean estiloRuta) {
     }
 
     /**

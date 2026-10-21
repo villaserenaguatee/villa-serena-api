@@ -11,9 +11,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Teléfono registrado para recibir push (tabla {@code dispositivos_push}). */
+/** Teléfono registrado para recibir push (tabla {@code push_devices}). */
 @Entity
-@Table(name = "dispositivos_push")
+@Table(name = "push_devices")
 @Getter
 @Setter
 public class DispositivoPush {
@@ -22,12 +22,12 @@ public class DispositivoPush {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "huesped_id", nullable = false)
+    @Column(name = "guest_id", nullable = false)
     private Long huespedId;
 
-    @Column(name = "token_expo", nullable = false)
+    @Column(name = "expo_token", nullable = false)
     private String tokenExpo;
 
-    @Column(name = "creado_en", insertable = false, updatable = false)
+    @Column(name = "created_at", insertable = false, updatable = false)
     private Instant creadoEn;
 }

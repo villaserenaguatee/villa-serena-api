@@ -40,7 +40,7 @@ import com.villaserena.api.estadia.CheckinService;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de la factura (OBJ-4B) a través del check-out real de Recepción. "Hoy" es el
@@ -87,7 +87,7 @@ class FacturaIntegrationTest {
     AlmacenEnMemoria.Almacen almacen;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     long recepcionistaId;
     String recepcion;
@@ -116,7 +116,7 @@ class FacturaIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.factura.numero").value(2))
                 .andExpect(jsonPath("$.factura.comprador.nit").value("4817205-7"));
-        assertThat(jdbc.queryForObject("SELECT ultimo_numero FROM series_factura WHERE serie = 'VS-A'",
+        assertThat(jdbc.queryForObject("SELECT last_number AS \"ultimo_numero\" FROM invoice_series WHERE series = 'VS-A'",
                 Integer.class)).isEqualTo(2);
     }
 
@@ -128,7 +128,7 @@ class FacturaIntegrationTest {
         assertThatThrownBy(() -> facturas.emitir(cuenta, "CF", "Otra vez"))
                 .isInstanceOf(ApiException.class)
                 .extracting("codigo").isEqualTo("FACTURA_EXISTENTE");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM facturas", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM invoices", Integer.class)).isEqualTo(1);
     }
 
     @Test
@@ -171,8 +171,8 @@ class FacturaIntegrationTest {
         String codigo = enEstadia("101", "carla@correo.test");
         long id = facturaId(checkout(codigo, "CF", "Carla Salida"));
         assertThat(jdbc.queryForObject("""
-                SELECT destinatario || ' ' || (payload ->> 'facturaId') || ' ' || (payload ->> 'serieNumero')
-                FROM outbox WHERE tipo = 'CORREO_FACTURA'""", String.class))
+                SELECT recipient || ' ' || (payload ->> 'facturaId') || ' ' || (payload ->> 'serieNumero')
+                 FROM outbox WHERE type = 'CORREO_FACTURA'""", String.class))
                 .isEqualTo("carla@correo.test " + id + " VS-A 1");
     }
 
@@ -196,7 +196,7 @@ class FacturaIntegrationTest {
     @Test
     void elHuespedSoloVeSuFactura() throws Exception {
         String codigo = enEstadia("101", "carla@correo.test");
-        long huesped = jdbc.queryForObject("SELECT id FROM huespedes WHERE correo = 'carla@correo.test'", Long.class);
+        long huesped = jdbc.queryForObject("SELECT id  FROM guests WHERE email = 'carla@correo.test'", Long.class);
         String suyo = token(() -> tokens.emitirParaHuesped(huesped));
         mvc.perform(get("/api/v1/app/reservas/{c}/factura", codigo).header("Authorization", suyo))
                 .andExpect(status().isNotFound());
@@ -209,8 +209,8 @@ class FacturaIntegrationTest {
         mvc.perform(get("/api/v1/facturas/{id}/pdf", id).header("Authorization", suyo)).andExpect(status().isOk());
 
         long otro = jdbc.queryForObject("""
-                INSERT INTO huespedes
-                    (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests
+                    (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Otro', 'otro@correo.test', '1', 'Guatemalteca', 'DPI', '1') RETURNING id""", Long.class);
         String ajeno = token(() -> tokens.emitirParaHuesped(otro));
         mvc.perform(get("/api/v1/facturas/{id}", id).header("Authorization", ajeno)).andExpect(status().isNotFound());
@@ -227,11 +227,11 @@ class FacturaIntegrationTest {
     @Test
     void sinSerieElCheckoutNoSeHace() throws Exception {
         String codigo = enEstadia("101", "carla@correo.test");
-        jdbc.update("DELETE FROM series_factura");
+        jdbc.update("DELETE FROM invoice_series");
         checkout(codigo, "CF", "Carla Salida")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("SERIE_NO_CONFIGURADA"));
-        assertThat(jdbc.queryForObject("SELECT estado FROM reservas WHERE codigo = ?", String.class, codigo))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE code = ?", String.class, codigo))
                 .isEqualTo("EN_ESTADIA");
     }
 
@@ -240,12 +240,12 @@ class FacturaIntegrationTest {
     /** Reserva de Recepción del 5 al 7 de octubre con check-in hecho. */
     private String enEstadia(String numero, String correo) {
         long huesped = jdbc.queryForObject("""
-                INSERT INTO huespedes
-                    (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests
+                    (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Huésped ' || ?, ?, '+502 5555 0000', 'Guatemalteca', 'DPI', '1234567890101')
                 RETURNING id""", Long.class, numero, correo);
-        long habitacion = jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = ?", Long.class, numero);
-        long tipo = jdbc.queryForObject("SELECT tipo_habitacion_id FROM habitaciones WHERE id = ?", Long.class,
+        long habitacion = jdbc.queryForObject("SELECT id  FROM rooms WHERE number = ?", Long.class, numero);
+        long tipo = jdbc.queryForObject("SELECT room_type_id AS \"tipo_habitacion_id\" FROM rooms WHERE id = ?", Long.class,
                 habitacion);
         Reserva reserva = reservaService.crear(SolicitudReserva.recepcion(huesped, tipo,
                 LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-07"), 1, habitacion, recepcionistaId));
@@ -271,8 +271,8 @@ class FacturaIntegrationTest {
     }
 
     private long cuentaDe(String codigo) {
-        return jdbc.queryForObject("SELECT cu.id FROM cuentas cu JOIN reservas r ON r.id = cu.reserva_id "
-                + "WHERE r.codigo = ?", Long.class, codigo);
+        return jdbc.queryForObject("SELECT cu.id  FROM accounts cu JOIN reservations r ON r.id = cu.reservation_id "
+                + "WHERE r.code = ?", Long.class, codigo);
     }
 
     private static long facturaId(ResultActions checkout) throws Exception {

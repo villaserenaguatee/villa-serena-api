@@ -30,5 +30,5 @@ import org.springframework.stereotype.Component;
  private static void titleRow(PdfPTable t,String title,int columns){var c=cell(title,serif(14),Element.ALIGN_LEFT);c.setColspan(columns);c.setPaddingTop(18);c.setPaddingBottom(7);t.addCell(c);}
  private static void total(PdfPTable t,String label,BigDecimal v,Color bg,Color color){for(String text:new String[]{label,money(v)}){var c=cell(text,FontFactory.getFont(FontFactory.HELVETICA_BOLD,10,color),text.equals(label)?Element.ALIGN_LEFT:Element.ALIGN_RIGHT);if(bg!=null)c.setBackgroundColor(bg);t.addCell(c);}}
  private static String value(String s){return s==null?"":s;} private static String money(BigDecimal n){return "Q "+n.setScale(2).toPlainString();}
- private static String method(FacturaDetalle.Pago p){return switch(p.metodo()){case STRIPE->"Tarjeta en línea (Stripe)";case CANAL->"Pagado al canal";case EFECTIVO->"Efectivo";case TARJETA->"Tarjeta";case OTRO->"Otro";};}
+ private static String method(FacturaDetalle.Pago p){return switch(p.metodo()){case RECURRENTE->"Tarjeta en línea (Recurrente)";case STRIPE->"Tarjeta en línea (Stripe)";case CANAL->"Pagado al canal";case EFECTIVO->"Efectivo";case TARJETA->"Tarjeta";case OTRO->"Otro";};}
 }

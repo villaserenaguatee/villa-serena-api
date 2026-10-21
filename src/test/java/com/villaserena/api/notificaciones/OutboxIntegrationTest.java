@@ -27,7 +27,7 @@ import com.villaserena.api.huespedes.TipoDocumento;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
@@ -58,7 +58,7 @@ class OutboxIntegrationTest {
     JavaMailSender correo;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     /** El JavaMailSender es un mock: tiene que devolver un mensaje de verdad para armarlo. */
     @org.junit.jupiter.api.BeforeEach

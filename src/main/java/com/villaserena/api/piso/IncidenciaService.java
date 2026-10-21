@@ -44,15 +44,14 @@ public class IncidenciaService {
     }
 
     private static final String SELECT = """
-            SELECT i.id, h.id, h.numero, h.piso, i.descripcion, i.impide_uso, h.ocupacion = 'OCUPADA',
-                   i.estado, rep.id, rep.nombre_completo, i.creado_en, tec.id, tec.nombre_completo,
-                   (SELECT max(he.fecha) FROM historial_estados he WHERE he.tipo_entidad = 'INCIDENCIA'
-                      AND he.id_entidad = i.id AND he.estado_nuevo = 'RESUELTA') AS resuelta_en,
-                   i.clave_foto, i.solucion
-            FROM incidencias i
-            JOIN habitaciones h ON h.id = i.habitacion_id
-            JOIN empleados rep ON rep.id = i.reportada_por_empleado_id
-            LEFT JOIN empleados tec ON tec.id = i.tecnico_id""";
+            SELECT i.id, h.id, h.number AS "numero", h.floor AS "piso", i.description AS "descripcion", i.blocks_use AS "impide_uso", h.occupancy = 'OCUPADA',
+                   i.status AS "estado", rep.id, rep.full_name AS "nombre_completo", i.created_at AS "creado_en", tec.id, tec.full_name AS "nombre_completo",
+                   (SELECT max(he.date) FROM status_history he WHERE he.entity_type = 'INCIDENCIA'
+                      AND he.entity_id = i.id AND he.new_status = 'RESUELTA') AS resuelta_en,
+                   i.photo_key AS "clave_foto", i.solution AS "solucion" FROM incidents i
+            JOIN rooms h ON h.id = i.room_id
+            JOIN employees rep ON rep.id = i.reported_by_employee_id
+            LEFT JOIN employees tec ON tec.id = i.technician_id""";
 
     private final HistorialEstadoService historial;
     private final AlmacenArchivos almacen;
@@ -76,7 +75,7 @@ public class IncidenciaService {
     @Transactional
     public Incidencias.Creada reportar(ReportarIncidenciaPeticion p, long empleadoId) {
         Habitacion h = jdbc.query("""
-                SELECT id, numero, ocupacion, condicion FROM habitaciones WHERE id = ? AND estado = 'ACTIVO'
+                SELECT id, number AS "numero", occupancy AS "ocupacion", condition AS "condicion" FROM rooms WHERE id = ? AND status = 'ACTIVO'
                 FOR UPDATE""",
                 (rs, i) -> new Habitacion(rs.getLong(1), rs.getString(2), rs.getString(3), rs.getString(4)),
                 p.habitacionId()).stream().findFirst()
@@ -86,8 +85,8 @@ public class IncidenciaService {
         Responsable responsable = Responsable.empleado(empleadoId);
 
         Creada creada = jdbc.queryForObject("""
-                INSERT INTO incidencias (habitacion_id, descripcion, impide_uso, clave_foto, reportada_por_empleado_id)
-                VALUES (?, ?, ?, ?, ?) RETURNING id, creado_en""",
+                INSERT INTO incidents (room_id, description, blocks_use, photo_key, reported_by_employee_id)
+                VALUES (?, ?, ?, ?, ?) RETURNING id, created_at""",
                 (rs, i) -> new Creada(rs.getLong(1), rs.getTimestamp(2)),
                 h.id(), p.descripcion().trim(), p.impideUso(), foto, empleadoId);
         historial.registrar(TipoEntidadHistorial.INCIDENCIA, creada.id(), null, "REPORTADA", responsable, null);
@@ -95,7 +94,7 @@ public class IncidenciaService {
         if (p.impideUso()) {
             if ("LIBRE".equals(h.ocupacion()) && !"FUERA_DE_SERVICIO".equals(h.condicion())) {
                 jdbc.update("""
-                        UPDATE habitaciones SET condicion = 'FUERA_DE_SERVICIO', limpieza_empleado_id = NULL
+                        UPDATE rooms SET condition = 'FUERA_DE_SERVICIO', cleaning_employee_id = NULL
                         WHERE id = ?""", h.id());
                 historial.registrar(TipoEntidadHistorial.HABITACION_CONDICION, h.id(), h.condicion(),
                         "FUERA_DE_SERVICIO", responsable, null);
@@ -120,23 +119,23 @@ public class IncidenciaService {
         StringBuilder sql = new StringBuilder(SELECT).append(" WHERE TRUE");
         List<Object> parametros = new ArrayList<>();
         if (vista == Vista.MANTENIMIENTO) {
-            sql.append(" AND i.estado IN ('REPORTADA', 'EN_PROCESO')");
+            sql.append(" AND i.status IN ('REPORTADA', 'EN_PROCESO')");
         }
         if (estado != null) {
-            sql.append(" AND i.estado = ?");
+            sql.append(" AND i.status = ?");
             parametros.add(estado);
         }
         if (habitacionId != null) {
-            sql.append(" AND i.habitacion_id = ?");
+            sql.append(" AND i.room_id = ?");
             parametros.add(habitacionId);
         }
         if (tecnicoId != null) {
-            sql.append(" AND i.tecnico_id = ?");
+            sql.append(" AND i.technician_id = ?");
             parametros.add(tecnicoId);
         }
         sql.append(vista == Vista.MANTENIMIENTO
-                ? " ORDER BY i.creado_en, i.id"
-                : " ORDER BY (i.estado = 'RESUELTA'), i.creado_en DESC, i.id DESC");
+                ? " ORDER BY i.created_at, i.id"
+                : " ORDER BY (i.status = 'RESUELTA'), i.created_at DESC, i.id DESC");
         return jdbc.query(sql.toString(), (rs, i) -> resumen(rs), parametros.toArray());
     }
 
@@ -144,12 +143,11 @@ public class IncidenciaService {
     public Incidencias.Detalle detalle(long id) {
         Incidencias.Resumen r = jdbc.query(SELECT + " WHERE i.id = ?", (rs, i) -> resumen(rs), id).stream()
                 .findFirst().orElseThrow(ApiException::noEncontrado);
-        String solucion = jdbc.queryForObject("SELECT solucion FROM incidencias WHERE id = ?", String.class, id);
+        String solucion = jdbc.queryForObject("SELECT solution AS \"solucion\" FROM incidents WHERE id = ?", String.class, id);
         List<Incidencias.HistorialOperacion> cambios = jdbc.query("""
-                SELECT h.estado_anterior, h.estado_nuevo, coalesce(e.nombre_completo, 'SISTEMA'), h.fecha, h.motivo
-                FROM historial_estados h LEFT JOIN empleados e ON e.id = h.id_responsable
-                WHERE h.tipo_entidad = 'INCIDENCIA' AND h.id_entidad = ?
-                ORDER BY h.fecha, h.id""",
+                SELECT h.previous_status AS "estado_anterior", h.new_status AS "estado_nuevo", coalesce(e.full_name, 'SISTEMA'), h.date AS "fecha", h.reason AS "motivo" FROM status_history h LEFT JOIN employees e ON e.id = h.responsible_id
+                WHERE h.entity_type = 'INCIDENCIA' AND h.entity_id = ?
+                ORDER BY h.date, h.id""",
                 (rs, i) -> new Incidencias.HistorialOperacion(rs.getString(1), rs.getString(2), rs.getString(3),
                         fecha(rs.getTimestamp(4)), rs.getString(5)),
                 id);
@@ -171,7 +169,7 @@ public class IncidenciaService {
         if (!"REPORTADA".equals(inc.estado())) {
             throw ApiException.conflicto("ESTADO_INVALIDO", "La incidencia ya está resuelta.");
         }
-        jdbc.update("UPDATE incidencias SET estado = 'EN_PROCESO', tecnico_id = ? WHERE id = ?", tecnicoId, id);
+        jdbc.update("UPDATE incidents SET status = 'EN_PROCESO', technician_id = ? WHERE id = ?", tecnicoId, id);
         historial.registrar(TipoEntidadHistorial.INCIDENCIA, id, "REPORTADA", "EN_PROCESO",
                 Responsable.empleado(tecnicoId), null);
         return detalle(id);
@@ -195,14 +193,14 @@ public class IncidenciaService {
                     "Esta incidencia está a cargo de " + inc.nombreTecnico() + ".");
         }
         Responsable responsable = Responsable.empleado(tecnicoId);
-        jdbc.update("UPDATE incidencias SET estado = 'RESUELTA', solucion = ? WHERE id = ?", solucion.trim(), id);
+        jdbc.update("UPDATE incidents SET status = 'RESUELTA', solution = ? WHERE id = ?", solucion.trim(), id);
         historial.registrar(TipoEntidadHistorial.INCIDENCIA, id, "EN_PROCESO", "RESUELTA", responsable, null);
 
         if (inc.impideUso() && !tieneIncidenciaQueImpideUso(inc.habitacionId())) {
-            String condicion = jdbc.queryForObject("SELECT condicion FROM habitaciones WHERE id = ? FOR UPDATE",
+            String condicion = jdbc.queryForObject("SELECT condition AS \"condicion\" FROM rooms WHERE id = ? FOR UPDATE",
                     String.class, inc.habitacionId());
             if ("FUERA_DE_SERVICIO".equals(condicion)) {
-                jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE id = ?", inc.habitacionId());
+                jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE id = ?", inc.habitacionId());
                 historial.registrar(TipoEntidadHistorial.HABITACION_CONDICION, inc.habitacionId(),
                         "FUERA_DE_SERVICIO", "SUCIA", responsable, null);
             }
@@ -218,8 +216,8 @@ public class IncidenciaService {
     @Transactional(readOnly = true)
     public boolean tieneIncidenciaQueImpideUso(long habitacionId) {
         return jdbc.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM incidencias
-                               WHERE habitacion_id = ? AND impide_uso AND estado <> 'RESUELTA')""",
+                SELECT EXISTS (SELECT 1 FROM incidents
+                               WHERE room_id = ? AND blocks_use AND status <> 'RESUELTA')""",
                 Boolean.class, habitacionId);
     }
 
@@ -230,7 +228,7 @@ public class IncidenciaService {
         }
         String c = clave.trim();
         boolean valida = c.startsWith(ImagenesService.PREFIJO_INCIDENCIAS) && !c.contains("..")
-                && jdbc.queryForObject("SELECT count(*) FROM incidencias WHERE clave_foto = ?", Integer.class, c) == 0
+                && jdbc.queryForObject("SELECT count(*)  FROM incidents WHERE photo_key = ?", Integer.class, c) == 0
                 && almacen.existePrivado(c);
         if (!valida) {
             throw ApiException.datosInvalidos("La foto no es válida. Súbela de nuevo.",
@@ -242,14 +240,14 @@ public class IncidenciaService {
     /** Bloquea la incidencia y luego lee el nombre del técnico (ver LimpiezaService#bloquear). */
     private Bloqueada bloquear(long id) {
         Bloqueada inc = jdbc.query("""
-                SELECT id, habitacion_id, impide_uso, estado, tecnico_id FROM incidencias WHERE id = ? FOR UPDATE""",
+                SELECT id, room_id AS "habitacion_id", blocks_use AS "impide_uso", status AS "estado", technician_id AS "tecnico_id" FROM incidents WHERE id = ? FOR UPDATE""",
                 (rs, i) -> new Bloqueada(rs.getLong(1), rs.getLong(2), rs.getBoolean(3), rs.getString(4),
                         rs.getLong(5), null),
                 id).stream().findFirst().orElseThrow(ApiException::noEncontrado);
         if (inc.tecnico() == 0) {
             return inc;
         }
-        String nombre = jdbc.queryForObject("SELECT nombre_completo FROM empleados WHERE id = ?", String.class,
+        String nombre = jdbc.queryForObject("SELECT full_name AS \"nombre_completo\" FROM employees WHERE id = ?", String.class,
                 inc.tecnico());
         return new Bloqueada(inc.id(), inc.habitacionId(), inc.impideUso(), inc.estado(), inc.tecnico(), nombre);
     }

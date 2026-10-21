@@ -2,6 +2,7 @@ package com.villaserena.api.reservas;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 
 import com.villaserena.api.comun.Responsable;
 import com.villaserena.api.huespedes.HuespedDatos;
@@ -17,23 +18,28 @@ import com.villaserena.api.huespedes.HuespedDatos;
  */
 public record SolicitudReserva(long tipoHabitacionId, LocalDate entrada, LocalDate salida, int numeroHuespedes,
         Long huespedId, HuespedDatos huesped, Long habitacionId, CanalReserva canal, String identificadorExterno,
-        BigDecimal montoCanal, Responsable responsable) {
+        BigDecimal montoCanal, Responsable responsable, LocalTime horaEstimadaLlegada) {
 
     public static SolicitudReserva web(long tipoHabitacionId, LocalDate entrada, LocalDate salida,
             int numeroHuespedes, HuespedDatos huesped) {
+        return web(tipoHabitacionId, entrada, salida, numeroHuespedes, huesped, null);
+    }
+
+    public static SolicitudReserva web(long tipoHabitacionId, LocalDate entrada, LocalDate salida,
+            int numeroHuespedes, HuespedDatos huesped, LocalTime horaEstimadaLlegada) {
         return new SolicitudReserva(tipoHabitacionId, entrada, salida, numeroHuespedes, null, huesped, null,
-                CanalReserva.DIRECTO_WEB, null, null, Responsable.CLIENTE);
+                CanalReserva.DIRECTO_WEB, null, null, Responsable.CLIENTE, horaEstimadaLlegada);
     }
 
     public static SolicitudReserva recepcion(long huespedId, long tipoHabitacionId, LocalDate entrada,
             LocalDate salida, int numeroHuespedes, Long habitacionId, long empleadoId) {
         return new SolicitudReserva(tipoHabitacionId, entrada, salida, numeroHuespedes, huespedId, null,
-                habitacionId, CanalReserva.RECEPCION, null, null, Responsable.empleado(empleadoId));
+                habitacionId, CanalReserva.RECEPCION, null, null, Responsable.empleado(empleadoId), null);
     }
 
     public static SolicitudReserva canal(CanalReserva canal, String identificadorExterno, BigDecimal monto,
             long tipoHabitacionId, LocalDate entrada, LocalDate salida, int numeroHuespedes, HuespedDatos huesped) {
         return new SolicitudReserva(tipoHabitacionId, entrada, salida, numeroHuespedes, null, huesped, null, canal,
-                identificadorExterno, monto, Responsable.CANAL);
+                identificadorExterno, monto, Responsable.CANAL, null);
     }
 }

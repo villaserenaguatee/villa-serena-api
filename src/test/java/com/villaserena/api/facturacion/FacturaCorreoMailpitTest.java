@@ -42,7 +42,7 @@ import com.villaserena.api.notificaciones.OutboxJob;
 import com.villaserena.api.reservas.Reserva;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.SolicitudReserva;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Criterio 3 de OBJ-4B: después del check-out, el Outbox envía el correo de la factura
@@ -102,7 +102,7 @@ class FacturaCorreoMailpitTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @AfterEach
     void reiniciarReloj() {
@@ -116,12 +116,12 @@ class FacturaCorreoMailpitTest {
                 t -> empleados.findByCorreoIgnoreCase("ana.perez@villaserena.test").orElseThrow().getId());
         String codigo = transacciones.execute(t -> {
             long huesped = jdbc.queryForObject("""
-                    INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento,
-                                           numero_documento)
+                    INSERT INTO guests (full_name, email, phone, nationality, document_type,
+                                           document_number)
                     VALUES ('Carla Salida', 'carla@correo.test', '+502 5555 4444', 'Guatemalteca', 'DPI', '1')
                     RETURNING id""", Long.class);
-            long habitacion = jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = '101'", Long.class);
-            long tipo = jdbc.queryForObject("SELECT tipo_habitacion_id FROM habitaciones WHERE id = ?", Long.class,
+            long habitacion = jdbc.queryForObject("SELECT id  FROM rooms WHERE number = '101'", Long.class);
+            long tipo = jdbc.queryForObject("SELECT room_type_id AS \"tipo_habitacion_id\" FROM rooms WHERE id = ?", Long.class,
                     habitacion);
             Reserva reserva = reservaService.crear(SolicitudReserva.recepcion(huesped, tipo,
                     LocalDate.parse("2026-10-05"), LocalDate.parse("2026-10-07"), 1, habitacion, recepcionista));

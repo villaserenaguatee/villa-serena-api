@@ -9,11 +9,11 @@ import org.springframework.context.annotation.Primary;
 
 import com.villaserena.api.archivos.AlmacenArchivos;
 
-/** Bucket privado en memoria para las pruebas que no necesitan MinIO. */
+/** Bucket privado en memoria para las pruebas sin dependencias de almacenamiento remoto. */
 @TestConfiguration(proxyBeanMethods = false)
 public class AlmacenEnMemoria {
 
-    public static final String URL_FIRMADA = "https://minio.test/firmada/";
+    public static final String URL_FIRMADA = "https://storage.test/firmada/";
 
     @Bean
     @Primary

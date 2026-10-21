@@ -113,7 +113,7 @@ public class CheckoutService {
                 bloqueos.add("Paga el saldo pendiente antes del check-out.");
             }
         }
-        String nombre = jdbc.queryForObject("SELECT nombre_completo FROM huespedes WHERE id = ?", String.class,
+        String nombre = jdbc.queryForObject("SELECT full_name AS \"nombre_completo\" FROM guests WHERE id = ?", String.class,
                 reserva.getHuespedId());
         return new VistaCheckout(reserva.getCodigo(), saldo, nombre, enCamino, pedidosACancelar(reserva.getId()),
                 bloqueos.isEmpty(), bloqueos);
@@ -123,7 +123,7 @@ public class CheckoutService {
      * Confirma el check-out:
      * <ol>
      * <li>Recepción: si hay saldo, UN solo pago por el total (EFECTIVO, TARJETA u OTRO).
-     * App: el saldo ya debe ser 0 (pagado con Stripe).</li>
+     * App: el saldo ya debe ser 0 (pagado con Recurrente).</li>
      * <li>Factura (Hugo), reserva FINALIZADA y cuenta CERRADA.</li>
      * <li>Habitación LIBRE + SUCIA, o FUERA_DE_SERVICIO si tiene una incidencia que
      * impide su uso.</li>
@@ -134,7 +134,7 @@ public class CheckoutService {
     @Transactional
     public CheckoutResultado hacerCheckout(Reserva reserva, Origen origen, String nit, String nombreComprador,
             PagoRecepcionPeticion pagoRecepcion, boolean aceptaCancelarPedidos, Responsable responsable) {
-        String estadoBloqueado = jdbc.queryForObject("SELECT estado FROM reservas WHERE id=? FOR UPDATE",String.class,reserva.getId());
+        String estadoBloqueado = jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE id=? FOR UPDATE",String.class,reserva.getId());
         if (!"EN_ESTADIA".equals(estadoBloqueado) || reserva.getEstado() != EstadoReserva.EN_ESTADIA) {
             throw ApiException.conflicto("ESTADO_INVALIDO", "Solo se puede hacer check-out de reservas en estadía.");
         }
@@ -183,7 +183,7 @@ public class CheckoutService {
         cuentas.save(cuenta);
         liberarHabitacion(reserva, responsable);
         cancelarPendientes(reserva.getId());
-        jdbc.update("DELETE FROM dispositivos_push WHERE huesped_id = ?", reserva.getHuespedId());
+        jdbc.update("DELETE FROM push_devices WHERE guest_id = ?", reserva.getHuespedId());
 
         return new CheckoutResultado(reserva.getCodigo(), EstadoReserva.FINALIZADA, EstadoCuenta.CERRADA,
                 BigDecimal.ZERO.setScale(2), factura.detalle());
@@ -198,14 +198,14 @@ public class CheckoutService {
 
     public boolean hayPedidoEnCamino(long reservaId) {
         Integer enCamino = jdbc.queryForObject(
-                "SELECT count(*) FROM pedidos WHERE reserva_id = ? AND estado = 'EN_CAMINO'", Integer.class,
+                "SELECT count(*)  FROM orders WHERE reservation_id = ? AND status = 'EN_CAMINO'", Integer.class,
                 reservaId);
         return enCamino != null && enCamino > 0;
     }
 
     private List<Long> pedidosACancelar(long reservaId) {
         return jdbc.queryForList(
-                "SELECT id FROM pedidos WHERE reserva_id = ? AND estado IN ('NUEVO', 'EN_PREPARACION') ORDER BY id",
+                "SELECT id  FROM orders WHERE reservation_id = ? AND status IN ('NUEVO', 'EN_PREPARACION') ORDER BY id",
                 Long.class, reservaId);
     }
 
@@ -237,13 +237,13 @@ public class CheckoutService {
     private void liberarHabitacion(Reserva reserva, Responsable responsable) {
         long habitacionId = reserva.getHabitacionId();
         String condicionAnterior = jdbc.queryForObject(
-                "SELECT condicion FROM habitaciones WHERE id = ? FOR UPDATE", String.class, habitacionId);
+                "SELECT condition AS \"condicion\" FROM rooms WHERE id = ? FOR UPDATE", String.class, habitacionId);
         Integer impideUso = jdbc.queryForObject("""
-                SELECT count(*) FROM incidencias
-                WHERE habitacion_id = ? AND impide_uso AND estado <> 'RESUELTA'""", Integer.class, habitacionId);
+                SELECT count(*)  FROM incidents
+                WHERE room_id = ? AND blocks_use AND status <> 'RESUELTA'""", Integer.class, habitacionId);
         String condicionNueva = impideUso != null && impideUso > 0 ? "FUERA_DE_SERVICIO" : "SUCIA";
         jdbc.update("""
-                UPDATE habitaciones SET ocupacion = 'LIBRE', condicion = ?, limpieza_empleado_id = NULL
+                UPDATE rooms SET occupancy = 'LIBRE', condition = ?, cleaning_employee_id = NULL
                 WHERE id = ?""", condicionNueva, habitacionId);
         historial.registrar(TipoEntidadHistorial.HABITACION_OCUPACION, habitacionId, "OCUPADA", "LIBRE",
                 responsable, null);
@@ -263,18 +263,18 @@ public class CheckoutService {
     private void cancelarPendientes(long reservaId) {
         String motivo = "Cancelado por el check-out";
         for (var fila : jdbc.queryForList(
-                "SELECT id, estado FROM pedidos WHERE reserva_id = ? AND estado IN ('NUEVO', 'EN_PREPARACION')",
+                "SELECT id, status AS \"estado\" FROM orders WHERE reservation_id = ? AND status IN ('NUEVO', 'EN_PREPARACION')",
                 reservaId)) {
             long id = ((Number) fila.get("id")).longValue();
-            jdbc.update("UPDATE pedidos SET estado = 'CANCELADO' WHERE id = ?", id);
+            jdbc.update("UPDATE orders SET status = 'CANCELADO' WHERE id = ?", id);
             historial.registrar(TipoEntidadHistorial.PEDIDO, id, (String) fila.get("estado"), "CANCELADO",
                     Responsable.SISTEMA, motivo);
         }
         for (var fila : jdbc.queryForList(
-                "SELECT id, estado FROM solicitudes WHERE reserva_id = ? AND estado IN ('PENDIENTE', 'EN_PROCESO')",
+                "SELECT id, status AS \"estado\" FROM requests WHERE reservation_id = ? AND status IN ('PENDIENTE', 'EN_PROCESO')",
                 reservaId)) {
             long id = ((Number) fila.get("id")).longValue();
-            jdbc.update("UPDATE solicitudes SET estado = 'CANCELADA' WHERE id = ?", id);
+            jdbc.update("UPDATE requests SET status = 'CANCELADA' WHERE id = ?", id);
             historial.registrar(TipoEntidadHistorial.SOLICITUD, id, (String) fila.get("estado"), "CANCELADA",
                     Responsable.SISTEMA, motivo);
         }

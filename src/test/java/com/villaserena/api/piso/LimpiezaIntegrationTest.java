@@ -30,7 +30,7 @@ import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de la limpieza (OBJ-3B-1, parte A). Empleados de prueba: Luis (LIMPIEZA),
@@ -59,7 +59,7 @@ class LimpiezaIntegrationTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     String luis;
     String pedro;
@@ -83,8 +83,8 @@ class LimpiezaIntegrationTest {
         sucia("103", "2026-10-05T08:00:00Z");
         llegadaHoy("103");
         // No son pendientes: ocupada sucia y fuera de servicio.
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA', condicion = 'SUCIA' WHERE numero = '301'");
-        jdbc.update("UPDATE habitaciones SET condicion = 'FUERA_DE_SERVICIO' WHERE numero = '302'");
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA', condition = 'SUCIA' WHERE number = '301'");
+        jdbc.update("UPDATE rooms SET condition = 'FUERA_DE_SERVICIO' WHERE number = '302'");
 
         mvc.perform(get("/api/v1/limpieza/habitaciones").header("Authorization", luis))
                 .andExpect(status().isOk())
@@ -121,8 +121,8 @@ class LimpiezaIntegrationTest {
         mvc.perform(get("/api/v1/limpieza/habitaciones").header("Authorization", luis))
                 .andExpect(jsonPath("$", hasSize(0)));
         assertThat(jdbc.queryForList("""
-                SELECT estado_anterior || '>' || estado_nuevo FROM historial_estados
-                WHERE tipo_entidad = 'HABITACION_CONDICION' AND id_entidad = ? AND tipo_responsable = 'EMPLEADO'
+                SELECT previous_status || '>' || new_status  FROM status_history
+                WHERE entity_type = 'HABITACION_CONDICION' AND entity_id = ? AND responsible_type = 'EMPLEADO'
                 ORDER BY id""", String.class, id))
                 .containsExactly("SUCIA>EN_LIMPIEZA", "EN_LIMPIEZA>LIMPIA");
     }
@@ -163,7 +163,7 @@ class LimpiezaIntegrationTest {
         accion(habitacionId("101"), "iniciar", luis)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("ESTADO_INVALIDO"));
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA', condicion = 'SUCIA' WHERE numero = '301'");
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA', condition = 'SUCIA' WHERE number = '301'");
         accion(habitacionId("301"), "iniciar", luis).andExpect(status().isConflict());
         accion(habitacionId("101"), "terminar", luis).andExpect(status().isConflict());
         accion(999_999, "iniciar", luis).andExpect(status().isNotFound());
@@ -181,7 +181,7 @@ class LimpiezaIntegrationTest {
         }
         mvc.perform(get("/api/v1/limpieza/habitaciones")).andExpect(status().isUnauthorized());
         mvc.perform(get("/api/v1/limpieza/habitaciones").header("Authorization", pedro)).andExpect(status().isOk());
-        assertThat(jdbc.queryForObject("SELECT condicion FROM habitaciones WHERE id = ?", String.class, id))
+        assertThat(jdbc.queryForObject("SELECT condition AS \"condicion\" FROM rooms WHERE id = ?", String.class, id))
                 .isEqualTo("SUCIA");
     }
 
@@ -195,26 +195,26 @@ class LimpiezaIntegrationTest {
     /** Marca la habitación como SUCIA desde el instante indicado (como lo haría el check-out). */
     private long sucia(String numero, String desde) {
         long id = habitacionId(numero);
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE id = ?", id);
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE id = ?", id);
         jdbc.update("""
-                INSERT INTO historial_estados (tipo_entidad, id_entidad, estado_anterior, estado_nuevo,
-                                               tipo_responsable, fecha)
+                INSERT INTO status_history (entity_type, entity_id, previous_status, new_status,
+                                               responsible_type, date)
                 VALUES ('HABITACION_CONDICION', ?, 'LIMPIA', 'SUCIA', 'SISTEMA', ?::timestamptz)""", id, desde);
         return id;
     }
 
     private void llegadaHoy(String numero) {
         long huesped = jdbc.queryForObject("""
-                INSERT INTO huespedes
-                    (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests
+                    (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Llega Hoy', 'llega.hoy@correo.test', '1', 'Guatemalteca', 'DPI', '1') RETURNING id""",
                 Long.class);
         jdbc.update("""
-                INSERT INTO reservas (codigo, huesped_id, tipo_habitacion_id, habitacion_id, fecha_entrada,
-                                      fecha_salida, numero_huespedes, estado, canal, total)
-                SELECT 'VS-LLEGA1', ?, h.tipo_habitacion_id, h.id, '2026-10-05', '2026-10-07', 1, 'CONFIRMADA',
+                INSERT INTO reservations (code, guest_id, room_type_id, room_id, checkin_date,
+                                      checkout_date, guest_count, status, channel, total)
+                SELECT 'VS-LLEGA1', ?, h.room_type_id, h.id, '2026-10-05', '2026-10-07', 1, 'CONFIRMADA',
                        'RECEPCION', 100.00
-                FROM habitaciones h WHERE h.numero = ?""", huesped, numero);
+                FROM rooms h WHERE h.number = ?""", huesped, numero);
     }
 
     private String token(String correo) {
@@ -228,6 +228,6 @@ class LimpiezaIntegrationTest {
     }
 
     private long habitacionId(String numero) {
-        return jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = ?", Long.class, numero);
+        return jdbc.queryForObject("SELECT id  FROM rooms WHERE number = ?", Long.class, numero);
     }
 }

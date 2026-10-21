@@ -41,12 +41,12 @@ import jakarta.servlet.http.HttpServletResponse;
 @EnableMethodSecurity
 public class SecurityConfig {
 
-    /** Rutas sin JWT (documento 09, sección 7.3). Stripe y el canal tienen su propia protección. */
+    /** Rutas sin JWT (documento 09, sección 7.3). Recurrente y el canal tienen su propia protección. */
     static final String[] RUTAS_PUBLICAS = {
             "/api/v1/auth/login",
             "/api/v1/auth/renovar",
             "/api/v1/publico/**",
-            "/api/v1/pagos/stripe/webhook",
+            "/api/v1/pagos/recurrente/webhook",
             "/api/v1/canal/**",
             "/api/v1/app/acceso/**",
             // El WebSocket se autentica en el mensaje CONNECT, no por HTTP

@@ -43,22 +43,21 @@ public class HabitacionService {
     private static final String SQL_EXCLUSION = "23P01";
 
     private static final String CONSULTA_ESTADO = """
-            SELECT h.id, h.numero, h.piso, t.id, t.nombre, h.ocupacion, h.condicion,
-                   EXISTS (SELECT 1 FROM reservas r WHERE r.habitacion_id = h.id
-                           AND r.estado = 'CONFIRMADA' AND r.fecha_entrada = ?) AS llega_hoy,
-                   EXISTS (SELECT 1 FROM reservas r WHERE r.habitacion_id = h.id
-                           AND r.estado = 'EN_ESTADIA' AND r.fecha_salida = ?) AS sale_hoy,
-                   h.ocupacion = 'OCUPADA' AND EXISTS (SELECT 1 FROM incidencias i WHERE i.habitacion_id = h.id
-                           AND i.impide_uso AND i.estado <> 'RESUELTA') AS incidencia_pendiente,
-                   b.id, b.descripcion, b.estado, b.creado_en
-            FROM habitaciones h
-            JOIN tipos_habitacion t ON t.id = h.tipo_habitacion_id
+            SELECT h.id, h.number AS "numero", h.floor AS "piso", t.id, t.name AS "nombre", h.occupancy AS "ocupacion", h.condition AS "condicion",
+                   EXISTS (SELECT 1 FROM reservations r WHERE r.room_id = h.id
+                           AND r.status = 'CONFIRMADA' AND r.checkin_date = ?) AS llega_hoy,
+                   EXISTS (SELECT 1 FROM reservations r WHERE r.room_id = h.id
+                           AND r.status = 'EN_ESTADIA' AND r.checkout_date = ?) AS sale_hoy,
+                   h.occupancy = 'OCUPADA' AND EXISTS (SELECT 1 FROM incidents i WHERE i.room_id = h.id
+                           AND i.blocks_use AND i.status <> 'RESUELTA') AS incidencia_pendiente,
+                   b.id, b.description AS "descripcion", b.status AS "estado", b.created_at AS "creado_en" FROM rooms h
+            JOIN room_types t ON t.id = h.room_type_id
             LEFT JOIN LATERAL (
-                SELECT i.id, i.descripcion, i.estado, i.creado_en FROM incidencias i
-                WHERE i.habitacion_id = h.id AND i.impide_uso AND i.estado <> 'RESUELTA'
-                ORDER BY i.creado_en, i.id LIMIT 1
-            ) b ON h.condicion = 'FUERA_DE_SERVICIO'
-            WHERE h.estado = 'ACTIVO'""";
+                SELECT i.id, i.description, i.status, i.created_at FROM incidents i
+                WHERE i.room_id = h.id AND i.blocks_use AND i.status <> 'RESUELTA'
+                ORDER BY i.created_at, i.id LIMIT 1
+            ) b ON h.condition = 'FUERA_DE_SERVICIO'
+            WHERE h.status = 'ACTIVO'""";
 
     private final ReservaService reservaService;
     private final HistorialEstadoService historial;
@@ -83,22 +82,22 @@ public class HabitacionService {
         StringBuilder sql = new StringBuilder(CONSULTA_ESTADO);
         List<Object> parametros = new ArrayList<>(List.of(hoy, hoy));
         if (ocupacion != null) {
-            sql.append(" AND h.ocupacion = ?");
+            sql.append(" AND h.occupancy = ?");
             parametros.add(ocupacion.name());
         }
         if (condicion != null) {
-            sql.append(" AND h.condicion = ?");
+            sql.append(" AND h.condition = ?");
             parametros.add(condicion.name());
         }
         if (tipoHabitacionId != null) {
-            sql.append(" AND h.tipo_habitacion_id = ?");
+            sql.append(" AND h.room_type_id = ?");
             parametros.add(tipoHabitacionId);
         }
         if (piso != null) {
-            sql.append(" AND h.piso = ?");
+            sql.append(" AND h.floor = ?");
             parametros.add(piso);
         }
-        sql.append(" ORDER BY h.piso, h.numero");
+        sql.append(" ORDER BY h.floor, h.number");
         return jdbc.query(sql.toString(), (rs, i) -> estado(rs), parametros.toArray());
     }
 
@@ -113,12 +112,12 @@ public class HabitacionService {
                     List.of(new DetalleError("salida", "Debe ser posterior a la entrada.")));
         }
         return jdbc.query("""
-                SELECT h.id, h.numero, h.piso FROM habitaciones h
-                WHERE h.tipo_habitacion_id = ? AND h.estado = 'ACTIVO' AND h.condicion <> 'FUERA_DE_SERVICIO'
-                  AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.habitacion_id = h.id
-                      AND r.estado IN ('PENDIENTE_PAGO', 'CONFIRMADA', 'EN_ESTADIA')
-                      AND daterange(r.fecha_entrada, r.fecha_salida, '[)') && daterange(?, ?, '[)'))
-                ORDER BY h.piso, h.numero""",
+                SELECT h.id, h.number AS "numero", h.floor AS "piso" FROM rooms h
+                WHERE h.room_type_id = ? AND h.status = 'ACTIVO' AND h.condition <> 'FUERA_DE_SERVICIO'
+                  AND NOT EXISTS (SELECT 1 FROM reservations r WHERE r.room_id = h.id
+                      AND r.status IN ('PENDIENTE_PAGO', 'CONFIRMADA', 'EN_ESTADIA')
+                      AND daterange(r.checkin_date, r.checkout_date, '[)') && daterange(?, ?, '[)'))
+                ORDER BY h.floor, h.number""",
                 (rs, i) -> new HabitacionReferencia(rs.getLong(1), rs.getString(2), rs.getInt(3)),
                 tipoHabitacionId, entrada, salida);
     }
@@ -127,7 +126,7 @@ public class HabitacionService {
     @Transactional
     public HabitacionEstado marcarSucia(long habitacionId, long empleadoId) {
         Habitacion habitacion = jdbc.query(
-                "SELECT numero, ocupacion, condicion, estado FROM habitaciones WHERE id = ? FOR UPDATE",
+                "SELECT number AS \"numero\", occupancy AS \"ocupacion\", condition AS \"condicion\", status AS \"estado\" FROM rooms WHERE id = ? FOR UPDATE",
                 (rs, i) -> new Habitacion(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4)),
                 habitacionId).stream().findFirst().orElseThrow(ApiException::noEncontrado);
         if (!"ACTIVO".equals(habitacion.estado())) {
@@ -139,7 +138,7 @@ public class HabitacionService {
                     "Solo se puede marcar como sucia una habitación libre y limpia. La habitación "
                             + habitacion.numero() + " está " + etiqueta(habitacion) + ".");
         }
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE id = ?", habitacionId);
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE id = ?", habitacionId);
         historial.registrar(TipoEntidadHistorial.HABITACION_CONDICION, habitacionId, "LIMPIA", "SUCIA",
                 Responsable.empleado(empleadoId), null);
         publicarDespuesDeConfirmar(Set.of(habitacionId));

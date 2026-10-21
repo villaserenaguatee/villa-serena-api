@@ -35,8 +35,8 @@ import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
 import com.villaserena.api.huespedes.HuespedDatos;
 import com.villaserena.api.huespedes.TipoDocumento;
-import com.villaserena.api.reservas.stripe.ErrorStripe;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.ErrorPasarela;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /** Pruebas de OBJ-2B: reservas de Recepción, cancelación con reembolso y check-in. */
 @SpringBootTest
@@ -65,7 +65,7 @@ class RecepcionIntegrationTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     String recepcion;
     long huespedId;
@@ -74,7 +74,7 @@ class RecepcionIntegrationTest {
     void preparar() {
         recepcion = token("ana.perez@villaserena.test");
         huespedId = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES ('Luisa Recepción', 'luisa@correo.test', '+502 5555 2222', 'Guatemalteca', 'DPI', '2222222220101')
                 RETURNING id""", Long.class);
     }
@@ -99,7 +99,7 @@ class RecepcionIntegrationTest {
                 .andExpect(jsonPath("$.saldoPendiente").value(1912.50))
                 .andExpect(jsonPath("$.historial[0].estadoNuevo").value("CONFIRMADA"))
                 .andExpect(jsonPath("$.historial[0].responsable").value("Ana Pérez"));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM pagos", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM payments", Integer.class)).isZero();
     }
 
     @Test
@@ -145,7 +145,7 @@ class RecepcionIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("CANCELADA"))
                 .andExpect(jsonPath("$.historial[2].motivo").value("Cambio de planes"));
-        verify(stripe).reembolsar("pi_prueba");
+        verify(pasarela).reembolsar("pi_prueba");
         assertThat(estadoPago(codigo)).isEqualTo("REEMBOLSADO");
         assertThat(estadoCuenta(codigo)).isEqualTo("CERRADA");
     }
@@ -182,14 +182,14 @@ class RecepcionIntegrationTest {
     }
 
     @Test
-    void siStripeRechazaElReembolsoNoSeCancela() throws Exception {
+    void siRecurrenteRechazaElReembolsoNoSeCancela() throws Exception {
         String codigo = reservaWebPagada("2026-10-20");
-        doThrow(new ErrorStripe("rechazado")).when(stripe).reembolsar(anyString());
+        doThrow(new ErrorPasarela("rechazado")).when(pasarela).reembolsar(anyString());
 
         cancelar(codigo, "Cambio de planes")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("REEMBOLSO_RECHAZADO"));
-        assertThat(jdbc.queryForObject("SELECT estado FROM reservas WHERE codigo = ?", String.class, codigo))
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE code = ?", String.class, codigo))
                 .isEqualTo("CONFIRMADA");
     }
 
@@ -209,7 +209,7 @@ class RecepcionIntegrationTest {
         checkIn(codigo)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.estado").value("EN_ESTADIA"));
-        assertThat(jdbc.queryForObject("SELECT ocupacion FROM habitaciones WHERE id = ?", String.class, habitacion))
+        assertThat(jdbc.queryForObject("SELECT occupancy AS \"ocupacion\" FROM rooms WHERE id = ?", String.class, habitacion))
                 .isEqualTo("OCUPADA");
     }
 
@@ -234,7 +234,7 @@ class RecepcionIntegrationTest {
     @Test
     void checkInConHabitacionSucia() throws Exception {
         long habitacion = habitacionId("203");
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE id = ?", habitacion);
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE id = ?", habitacion);
         String codigo = codigoDe(crear(tipoId("Doble Superior"), "2026-10-05", "2026-10-07", 1, habitacion));
         checkIn(codigo).andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("HABITACION_NO_LISTA"))
@@ -243,15 +243,28 @@ class RecepcionIntegrationTest {
 
     // ------------------------------------------------------------ apoyo
 
-    /** Reserva web confirmada con un pago de Stripe aprobado (como si ya hubiera llegado el webhook). */
+    /** Reserva web confirmada con un pago de Recurrente aprobado (como si ya hubiera llegado el webhook). */
+    @Test
+    void pagoHistoricoNoSeReembolsaConElProveedorNuevo() throws Exception {
+        String codigo = reservaWebPagada("2026-10-20");
+        jdbc.update("UPDATE payments SET method = 'STRIPE' WHERE checkout_id = 'cs_prueba'");
+        cancelar(codigo, "Cambio de planes")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("PAGO_LEGADO_REQUIERE_CONCILIACION"));
+        org.mockito.Mockito.verifyNoInteractions(pasarela);
+        assertThat(estadoPago(codigo)).isEqualTo("APROBADO");
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM reservations WHERE code = ?", String.class, codigo))
+                .isEqualTo("CONFIRMADA");
+    }
+
     private String reservaWebPagada(String entrada) {
         Reserva r = reservaService.crear(SolicitudReserva.web(tipoId("Doble Superior"), LocalDate.parse(entrada),
                 LocalDate.parse(entrada).plusDays(2), 2, new HuespedDatos("Web Pagada", "web.pagada@correo.test",
                         "+502 5555 3333", "Guatemalteca", TipoDocumento.DPI, "3333333330101")));
-        reservaService.cambiarEstado(r, EstadoReserva.CONFIRMADA, com.villaserena.api.comun.Responsable.STRIPE, null);
+        reservaService.cambiarEstado(r, EstadoReserva.CONFIRMADA, com.villaserena.api.comun.Responsable.RECURRENTE, null);
         jdbc.update("""
-                INSERT INTO pagos (cuenta_id, metodo, estado, monto, stripe_session_id, stripe_payment_intent_id, aprobado_en)
-                SELECT id, 'STRIPE', 'APROBADO', ?, 'cs_prueba', 'pi_prueba', now() FROM cuentas WHERE reserva_id = ?""",
+                INSERT INTO payments (account_id, method, status, amount, checkout_id, external_payment_id, approved_at)
+                SELECT id, 'RECURRENTE', 'APROBADO', ?, 'cs_prueba', 'pi_prueba', now() FROM accounts WHERE reservation_id = ?""",
                 r.getTotal(), r.getId());
         return r.getCodigo();
     }
@@ -282,13 +295,13 @@ class RecepcionIntegrationTest {
 
     private String estadoPago(String codigo) {
         return jdbc.queryForObject("""
-                SELECT p.estado FROM pagos p JOIN cuentas c ON c.id = p.cuenta_id
-                JOIN reservas r ON r.id = c.reserva_id WHERE r.codigo = ?""", String.class, codigo);
+                SELECT p.status AS "estado" FROM payments p JOIN accounts c ON c.id = p.account_id
+                JOIN reservations r ON r.id = c.reservation_id WHERE r.code = ?""", String.class, codigo);
     }
 
     private String estadoCuenta(String codigo) {
         return jdbc.queryForObject("""
-                SELECT c.estado FROM cuentas c JOIN reservas r ON r.id = c.reserva_id WHERE r.codigo = ?""",
+                SELECT c.status AS "estado" FROM accounts c JOIN reservations r ON r.id = c.reservation_id WHERE r.code = ?""",
                 String.class, codigo);
     }
 
@@ -304,10 +317,10 @@ class RecepcionIntegrationTest {
     }
 
     private long tipoId(String nombre) {
-        return jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = ?", Long.class, nombre);
+        return jdbc.queryForObject("SELECT id  FROM room_types WHERE name = ?", Long.class, nombre);
     }
 
     private long habitacionId(String numero) {
-        return jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = ?", Long.class, numero);
+        return jdbc.queryForObject("SELECT id  FROM rooms WHERE number = ?", Long.class, numero);
     }
 }

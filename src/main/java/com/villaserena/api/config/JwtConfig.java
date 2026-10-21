@@ -41,7 +41,7 @@ public class JwtConfig {
     SecretKey claveJwt(PropiedadesVillaSerena propiedades) {
         String secreto = propiedades.jwt().secreto();
         if (secreto == null || secreto.isBlank()) {
-            throw new IllegalStateException("Falta JWT_SECRET en el .env (ver .env.example).");
+            throw new IllegalStateException("Falta JWT_SECRET (ver docs/ENTORNOS.md).");
         }
         byte[] bytes = Base64.getDecoder().decode(secreto);
         if (bytes.length < 32) {

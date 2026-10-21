@@ -36,7 +36,7 @@ import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de las incidencias y sus fotos (OBJ-3B-1, parte B). Luis es de LIMPIEZA,
@@ -71,7 +71,7 @@ class IncidenciasIntegrationTest {
     AlmacenEnMemoria.Almacen almacen;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     String recepcion;
     String luis;
@@ -159,7 +159,7 @@ class IncidenciasIntegrationTest {
 
     @Test
     void enHabitacionOcupadaSoloQuedaElIndicadorPendiente() throws Exception {
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE numero = '202'");
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA' WHERE number = '202'");
         reportar(luis, "202", "No enciende el aire acondicionado.", true, null).andExpect(status().isCreated());
         assertThat(condicion("202")).isEqualTo("LIMPIA");
         mvc.perform(get("/api/v1/habitaciones").param("piso", "2").header("Authorization", recepcion))
@@ -174,12 +174,12 @@ class IncidenciasIntegrationTest {
 
     @Test
     void siLaEstabanLimpiandoDejaDeEstarACargo() throws Exception {
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE numero = '102'");
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE number = '102'");
         mvc.perform(post("/api/v1/limpieza/habitaciones/{id}/iniciar", habitacionId("102"))
                 .header("Authorization", luis)).andExpect(status().isOk());
         reportar(luis, "102", "Se rompió el lavamanos.", true, null).andExpect(status().isCreated());
-        assertThat(jdbc.queryForObject("SELECT condicion || '/' || coalesce(limpieza_empleado_id::text, '-') "
-                + "FROM habitaciones WHERE numero = '102'", String.class)).isEqualTo("FUERA_DE_SERVICIO/-");
+        assertThat(jdbc.queryForObject("SELECT condition || '/' || coalesce(cleaning_employee_id::text, '-') "
+                + "FROM rooms WHERE number = '102'", String.class)).isEqualTo("FUERA_DE_SERVICIO/-");
     }
 
     @Test
@@ -276,7 +276,7 @@ class IncidenciasIntegrationTest {
 
     @Test
     void enHabitacionOcupadaResolverQuitaElIndicador() throws Exception {
-        jdbc.update("UPDATE habitaciones SET ocupacion = 'OCUPADA' WHERE numero = '202'");
+        jdbc.update("UPDATE rooms SET occupancy = 'OCUPADA' WHERE number = '202'");
         long id = idDe(reportar(luis, "202", "Sin agua caliente.", true, null));
         tomar(id, marta).andExpect(status().isOk());
         resolver(id, marta, "Se reinició el calentador.").andExpect(status().isOk());
@@ -343,12 +343,12 @@ class IncidenciasIntegrationTest {
     /** Incidencia insertada directamente, reportada en la fecha indicada. */
     private long incidenciaDel(String numero, String fecha, String estado) {
         return jdbc.queryForObject("""
-                INSERT INTO incidencias (habitacion_id, descripcion, impide_uso, estado, reportada_por_empleado_id,
-                                         tecnico_id, solucion, creado_en)
+                INSERT INTO incidents (room_id, description, blocks_use, status, reported_by_employee_id,
+                                         technician_id, solution, created_at)
                 SELECT h.id, 'Daño de prueba', FALSE, ?, e.id, CASE WHEN ? = 'RESUELTA' THEN e.id END,
                        CASE WHEN ? = 'RESUELTA' THEN 'Listo' END, ?::timestamptz
-                FROM habitaciones h, empleados e
-                WHERE h.numero = ? AND e.correo = 'marta.xicara@villaserena.test'
+                FROM rooms h, employees e
+                WHERE h.number = ? AND e.email = 'marta.xicara@villaserena.test'
                 RETURNING id""", Long.class, estado, estado, estado, fecha, numero);
     }
 
@@ -361,7 +361,7 @@ class IncidenciasIntegrationTest {
     }
 
     private String condicion(String numero) {
-        return jdbc.queryForObject("SELECT condicion FROM habitaciones WHERE numero = ?", String.class, numero);
+        return jdbc.queryForObject("SELECT condition AS \"condicion\" FROM rooms WHERE number = ?", String.class, numero);
     }
 
     private String token(String correo) {
@@ -375,10 +375,10 @@ class IncidenciasIntegrationTest {
     }
 
     private long empleadoId(String correo) {
-        return jdbc.queryForObject("SELECT id FROM empleados WHERE correo = ?", Long.class, correo);
+        return jdbc.queryForObject("SELECT id  FROM employees WHERE email = ?", Long.class, correo);
     }
 
     private long habitacionId(String numero) {
-        return jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = ?", Long.class, numero);
+        return jdbc.queryForObject("SELECT id  FROM rooms WHERE number = ?", Long.class, numero);
     }
 }

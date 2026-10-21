@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.jayway.jsonpath.JsonPath;
 import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Pruebas de OBJ-1C parte B (HU-CM-01): autenticación por clave, validaciones,
@@ -43,7 +43,7 @@ class CanalIntegrationTest {
     JdbcTemplate jdbc;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     private static String peticion(String identificador, String entrada, String salida, int huespedes) {
         return """
@@ -89,21 +89,21 @@ class CanalIntegrationTest {
         // El alojamiento es el monto del canal, en una sola línea (RN-TAR-010), y el
         // pago queda APROBADO con método CANAL (RN-PAG-008).
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM reserva_noches rn JOIN reservas r ON r.id = rn.reserva_id
-                WHERE r.codigo = ?""", Integer.class, codigo)).isZero();
+                SELECT count(*)  FROM reservation_nights rn JOIN reservations r ON r.id = rn.reservation_id
+                WHERE r.code = ?""", Integer.class, codigo)).isZero();
         assertThat(jdbc.queryForObject("""
-                SELECT p.metodo || ':' || p.estado || ':' || p.monto
-                FROM pagos p JOIN cuentas c ON c.id = p.cuenta_id JOIN reservas r ON r.id = c.reserva_id
-                WHERE r.codigo = ?""", String.class, codigo)).isEqualTo("CANAL:APROBADO:1800.00");
+                SELECT p.method || ':' || p.status || ':' || p.amount
+                 FROM payments p JOIN accounts c ON c.id = p.account_id JOIN reservations r ON r.id = c.reservation_id
+                WHERE r.code = ?""", String.class, codigo)).isEqualTo("CANAL:APROBADO:1800.00");
 
         // El correo de confirmación quedó PENDIENTE en el outbox, con los datos del huésped.
         assertThat(jdbc.queryForObject("""
-                SELECT estado FROM outbox
-                WHERE tipo = 'CORREO_CONFIRMACION' AND destinatario = 'john.smith@example.com'
+                SELECT status AS "estado" FROM outbox
+                WHERE type = 'CORREO_CONFIRMACION' AND recipient = 'john.smith@example.com'
                 ORDER BY id DESC LIMIT 1""", String.class)).isEqualTo("PENDIENTE");
         assertThat(jdbc.queryForObject("""
-                SELECT payload ->> 'codigo' FROM outbox
-                WHERE tipo = 'CORREO_CONFIRMACION' ORDER BY id DESC LIMIT 1""", String.class)).isEqualTo(codigo);
+                SELECT payload ->> 'codigo'  FROM outbox
+                WHERE type = 'CORREO_CONFIRMACION' ORDER BY id DESC LIMIT 1""", String.class)).isEqualTo(codigo);
     }
 
     @Test
@@ -119,12 +119,12 @@ class CanalIntegrationTest {
         assertThat(JsonPath.<String>read(repetida, "$.codigo"))
                 .isEqualTo(JsonPath.<String>read(primera, "$.codigo"));
         assertThat(jdbc.queryForObject(
-                "SELECT count(*) FROM reservas WHERE canal = 'BOOKING' AND identificador_externo = ?",
+                "SELECT count(*)  FROM reservations WHERE channel = 'BOOKING' AND external_identifier = ?",
                 Integer.class, "BK-2002")).isEqualTo(1);
         // Tampoco se encola un segundo correo.
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM outbox
-                WHERE tipo = 'CORREO_CONFIRMACION' AND destinatario = 'john.smith@example.com'""",
+                SELECT count(*)  FROM outbox
+                WHERE type = 'CORREO_CONFIRMACION' AND recipient = 'john.smith@example.com'""",
                 Integer.class)).isEqualTo(1);
     }
 
@@ -147,7 +147,7 @@ class CanalIntegrationTest {
                         .content(peticion("BK-3005", "2026-11-10", "2026-11-12", 2)))
                 .andExpect(status().isUnauthorized());
 
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM reservas WHERE identificador_externo LIKE 'BK-300%'",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM reservations WHERE external_identifier LIKE 'BK-300%'",
                 Integer.class)).isZero();
     }
 
@@ -208,8 +208,8 @@ class CanalIntegrationTest {
     void sinDisponibilidadResponde409() throws Exception {
         // Ocupa todas las habitaciones del tipo 1 en esas fechas.
         Integer habitaciones = jdbc.queryForObject("""
-                SELECT count(*) FROM habitaciones
-                WHERE tipo_habitacion_id = 1 AND estado = 'ACTIVO' AND condicion <> 'FUERA_DE_SERVICIO'""",
+                SELECT count(*)  FROM rooms
+                WHERE room_type_id = 1 AND status = 'ACTIVO' AND condition <> 'FUERA_DE_SERVICIO'""",
                 Integer.class);
         for (int i = 0; i < habitaciones; i++) {
             enviar(CLAVE_BOOKING, peticion("BK-600" + i, "2026-11-20", "2026-11-22", 2))

@@ -3,13 +3,12 @@ package com.villaserena.api;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
 /**
@@ -18,8 +17,17 @@ import org.springframework.test.context.TestPropertySource;
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
-// Clave pública de prueba: este contexto no activa el perfil test.
-@TestPropertySource(properties = "villaserena.jwt.secreto=UHVibGljIHRlc3QgZml4dHVyZSBvbmx5IC0gbmV2ZXIgY29uZmlndXJlIHRoZSBhcHBsaWNhdGlvbiB3aXRoIHRoaXMgdmFsdWUu")
+@ActiveProfiles("prod")
+@TestPropertySource(properties = {
+		"spring.config.import=",
+        "villaserena.primer-admin.habilitado=false",
+        "WEB_URL=https://hotel.example", "CORS_ORIGENES=https://hotel.example",
+        "SPRING_DATASOURCE_URL=jdbc:postgresql://localhost/unused",
+        "SPRING_DATASOURCE_USERNAME=test", "SPRING_DATASOURCE_PASSWORD=test",
+		"villaserena.primer-admin.correo=",
+		"villaserena.primer-admin.nombre=",
+		"villaserena.primer-admin.contrasena=",
+		"villaserena.jwt.secreto=UHVibGljIHRlc3QgZml4dHVyZSBvbmx5IC0gbmV2ZXIgY29uZmlndXJlIHRoZSBhcHBsaWNhdGlvbiB3aXRoIHRoaXMgdmFsdWUu" })
 class MigracionesSinDemoTests {
 
 	@Autowired
@@ -28,22 +36,56 @@ class MigracionesSinDemoTests {
 	@Autowired
 	Environment entorno;
 
+    @Autowired
+    com.villaserena.api.auth.EmpleadoRepository empleados;
+    @Autowired
+    org.springframework.security.crypto.password.PasswordEncoder encoder;
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void bootstrapCreaSoloElPrimerAdminYNoReemplazaSusCredenciales() {
+        var datos = new com.villaserena.api.config.PropiedadesVillaSerena.PrimerAdmin(
+                true, "admin@example.com", "Admin inicial", "Clave-temporal-123");
+        var props = new com.villaserena.api.config.PropiedadesVillaSerena(
+                null, null, null, null, datos, null, null, null, null, null);
+        new com.villaserena.api.auth.PrimerAdministrador(empleados, encoder, props, jdbc).run(null);
+        empleados.flush();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM employees WHERE role='ADMIN'", Long.class)).isEqualTo(1);
+        String hash = jdbc.queryForObject("SELECT password_hash FROM employees", String.class);
+        assertThat(encoder.matches("Clave-temporal-123", hash)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT must_change_password FROM employees", Boolean.class)).isTrue();
+        var otro = new com.villaserena.api.config.PropiedadesVillaSerena.PrimerAdmin(
+                true, "otro@example.com", "Otro admin", "Otra-clave-temporal-123");
+        var otrasProps = new com.villaserena.api.config.PropiedadesVillaSerena(
+                null, null, null, null, otro, null, null, null, null, null);
+        new com.villaserena.api.auth.PrimerAdministrador(empleados, encoder, otrasProps, jdbc).run(null);
+        empleados.flush();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM employees", Long.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT password_hash FROM employees", String.class)).isEqualTo(hash);
+    }
+
 	@Test
 	void noAplicaElSeedDeDemostracion() {
-		Integer v6 = jdbc.queryForObject(
-				"SELECT count(*) FROM flyway_schema_history WHERE version = '6'", Integer.class);
+		Integer semillas = jdbc.queryForObject("""
+				SELECT count(*)  FROM flyway_schema_history WHERE version IN ('6','17.1','22.1','24.1')
+				""", Integer.class);
 		Integer esquema = jdbc.queryForObject(
-				"SELECT count(*) FROM flyway_schema_history WHERE version IN ('1','2','3','4','5') AND success",
+				"SELECT count(*)  FROM flyway_schema_history WHERE version IN ('1','2','3','4','5') AND success",
 				Integer.class);
-		assertThat(v6).isZero();
+		assertThat(semillas).isZero();
 		assertThat(esquema).isEqualTo(5);
 	}
 
-	@ParameterizedTest
-	@ValueSource(strings = { "configuracion_hotel", "series_factura", "tipos_habitacion", "habitaciones",
-			"temporadas", "items_menu", "articulos", "canales", "empleados" })
-	void lasTablasQuedanSinDatosFicticios(String tabla) {
-		assertThat(jdbc.queryForObject("SELECT count(*) FROM " + tabla, Integer.class)).isZero();
+	@Test
+	void todasLasTablasDeNegocioQuedanVacias() {
+		var tablas = jdbc.queryForList("""
+				SELECT tablename  FROM pg_tables
+				WHERE schemaname = 'public' AND tablename <> 'flyway_schema_history'
+				ORDER BY tablename
+				""", String.class);
+		assertThat(tablas).isNotEmpty().allSatisfy(tabla ->
+				assertThat(jdbc.queryForObject("SELECT count(*)  FROM \"" + tabla.replace("\"", "\"\"") + "\"", Long.class))
+						.as("Filas iniciales en %s", tabla).isZero());
 	}
 
 	@Test

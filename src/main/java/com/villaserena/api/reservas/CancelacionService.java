@@ -14,12 +14,12 @@ import com.villaserena.api.comun.ApiException;
 import com.villaserena.api.comun.Responsable;
 import com.villaserena.api.reservas.dto.VistaPreviaCancelacion;
 import com.villaserena.api.reservas.dto.VistaPreviaCancelacion.Resultado;
-import com.villaserena.api.reservas.stripe.ErrorStripe;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.ErrorPasarela;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Cancelación desde Recepción (HU-REC-05): solo reservas CONFIRMADA que no sean de
- * canal externo, con motivo. Reembolso total por Stripe si faltan 48 h o más para las
+ * canal externo, con motivo. Reembolso total por Recurrente si faltan 48 h o más para las
  * 15:00 del día de llegada (America/Guatemala) y hubo pago en línea; si no, nada.
  */
 @Service
@@ -33,15 +33,15 @@ public class CancelacionService {
     private final ReservaService reservaService;
     private final CuentaRepository cuentas;
     private final PagoRepository pagos;
-    private final PasarelaStripe stripe;
+    private final PasarelaPagos pasarela;
     private final Clock reloj;
 
     public CancelacionService(ReservaService reservaService, CuentaRepository cuentas, PagoRepository pagos,
-            PasarelaStripe stripe, Clock reloj) {
+            PasarelaPagos pasarela, Clock reloj) {
         this.reservaService = reservaService;
         this.cuentas = cuentas;
         this.pagos = pagos;
-        this.stripe = stripe;
+        this.pasarela = pasarela;
         this.reloj = reloj;
     }
 
@@ -50,25 +50,29 @@ public class CancelacionService {
     public VistaPreviaCancelacion vistaPrevia(String codigo) {
         Reserva reserva = reservaService.porCodigo(codigo);
         validarCancelable(reserva);
-        return calcular(reserva, pagosStripeAprobados(reserva));
+        return calcular(reserva, pagosOnlineAprobados(reserva));
     }
 
     /**
-     * Cancela la reserva. Si corresponde reembolso, primero lo pide a Stripe: si Stripe
+     * Cancela la reserva. Si corresponde reembolso, primero lo pide a Recurrente: si Recurrente
      * lo rechaza, la reserva no se cancela (RN-CAN-008).
      */
     @Transactional
     public Reserva cancelar(String codigo, String motivo, long empleadoId) {
         Reserva reserva = reservaService.porCodigo(codigo);
         validarCancelable(reserva);
-        List<Pago> stripeAprobados = pagosStripeAprobados(reserva);
-        if (calcular(reserva, stripeAprobados).resultado() == Resultado.REEMBOLSO_TOTAL) {
-            for (Pago pago : stripeAprobados) {
+        List<Pago> pasarelaAprobados = pagosOnlineAprobados(reserva);
+        if (calcular(reserva, pasarelaAprobados).resultado() == Resultado.REEMBOLSO_TOTAL) {
+            if (pasarelaAprobados.stream().anyMatch(p -> p.getMetodo() == MetodoPago.STRIPE)) {
+                throw ApiException.conflicto("PAGO_LEGADO_REQUIERE_CONCILIACION",
+                        "El pago histórico requiere conciliar el reembolso con su proveedor original.");
+            }
+            for (Pago pago : pasarelaAprobados) {
                 try {
-                    stripe.reembolsar(pago.getStripePaymentIntentId());
-                } catch (ErrorStripe e) {
+                    pasarela.reembolsar(pago.getPagoExternoId());
+                } catch (ErrorPasarela e) {
                     throw ApiException.conflicto("REEMBOLSO_RECHAZADO",
-                            "Stripe rechazó el reembolso; la reserva no se canceló.");
+                            "Recurrente rechazó el reembolso; la reserva no se canceló.");
                 }
                 pago.setEstado(EstadoPago.REEMBOLSADO);
                 pago.setReembolsadoEn(reloj.instant());
@@ -78,7 +82,7 @@ public class CancelacionService {
         return reserva;
     }
 
-    private VistaPreviaCancelacion calcular(Reserva reserva, List<Pago> stripeAprobados) {
+    private VistaPreviaCancelacion calcular(Reserva reserva, List<Pago> pasarelaAprobados) {
         Cuenta cuenta = cuentas.findByReservaId(reserva.getId()).orElseThrow();
         boolean tienePagos = pagos.findByCuentaIdOrderByCreadoEn(cuenta.getId()).stream()
                 .anyMatch(p -> p.getEstado() == EstadoPago.APROBADO);
@@ -87,17 +91,17 @@ public class CancelacionService {
         }
         ZonedDateTime llegada = reserva.getFechaEntrada().atTime(HORA_CHECK_IN).atZone(reloj.getZone());
         boolean aTiempo = !Duration.between(reloj.instant(), llegada.toInstant()).minus(UMBRAL_REEMBOLSO).isNegative();
-        if (aTiempo && !stripeAprobados.isEmpty()) {
-            BigDecimal monto = stripeAprobados.stream().map(Pago::getMonto).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (aTiempo && !pasarelaAprobados.isEmpty()) {
+            BigDecimal monto = pasarelaAprobados.stream().map(Pago::getMonto).reduce(BigDecimal.ZERO, BigDecimal::add);
             return new VistaPreviaCancelacion(Resultado.REEMBOLSO_TOTAL, monto.setScale(2));
         }
         return new VistaPreviaCancelacion(Resultado.SIN_REEMBOLSO, BigDecimal.ZERO.setScale(2));
     }
 
-    private List<Pago> pagosStripeAprobados(Reserva reserva) {
+    private List<Pago> pagosOnlineAprobados(Reserva reserva) {
         Cuenta cuenta = cuentas.findByReservaId(reserva.getId()).orElseThrow();
         return pagos.findByCuentaIdOrderByCreadoEn(cuenta.getId()).stream()
-                .filter(p -> p.getMetodo() == MetodoPago.STRIPE && p.getEstado() == EstadoPago.APROBADO)
+                .filter(p -> (p.getMetodo() == MetodoPago.RECURRENTE || p.getMetodo() == MetodoPago.STRIPE) && p.getEstado() == EstadoPago.APROBADO)
                 .toList();
     }
 

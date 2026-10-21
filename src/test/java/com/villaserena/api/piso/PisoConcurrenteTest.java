@@ -33,7 +33,7 @@ import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
 import com.villaserena.api.notificaciones.HabitacionEventos;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Dos empleados a la vez (OBJ-3B-1): solo uno inicia la limpieza o toma la incidencia;
@@ -65,7 +65,7 @@ class PisoConcurrenteTest {
     RelojFijoConfig.RelojPrueba reloj;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @MockitoBean
     HabitacionEventos eventos;
@@ -75,22 +75,22 @@ class PisoConcurrenteTest {
 
     @BeforeEach
     void preparar() {
-        habitacion = jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = '302'", Long.class);
-        historialPrevio = jdbc.queryForObject("SELECT coalesce(max(id), 0) FROM historial_estados", Long.class);
+        habitacion = jdbc.queryForObject("SELECT id  FROM rooms WHERE number = '302'", Long.class);
+        historialPrevio = jdbc.queryForObject("SELECT coalesce(max(id), 0)  FROM status_history", Long.class);
     }
 
     @AfterEach
     void limpiar() {
-        jdbc.update("DELETE FROM incidencias WHERE habitacion_id = ?", habitacion);
-        jdbc.update("DELETE FROM historial_estados WHERE id > ?", historialPrevio);
-        jdbc.update("UPDATE habitaciones SET condicion = 'LIMPIA', limpieza_empleado_id = NULL WHERE id = ?",
+        jdbc.update("DELETE FROM incidents WHERE room_id = ?", habitacion);
+        jdbc.update("DELETE FROM status_history WHERE id > ?", historialPrevio);
+        jdbc.update("UPDATE rooms SET condition = 'LIMPIA', cleaning_employee_id = NULL WHERE id = ?",
                 habitacion);
         reloj.reiniciar();
     }
 
     @Test
     void dosEmpleadosInicianLaMismaLimpiezaYSoloUnoGana() throws Exception {
-        jdbc.update("UPDATE habitaciones SET condicion = 'SUCIA' WHERE id = ?", habitacion);
+        jdbc.update("UPDATE rooms SET condition = 'SUCIA' WHERE id = ?", habitacion);
         List<MockHttpServletResponse> respuestas = aLaVez(
                 "/api/v1/limpieza/habitaciones/" + habitacion + "/iniciar",
                 token("luis.garcia@villaserena.test"), token("pedro.coy@villaserena.test"));
@@ -99,7 +99,7 @@ class PisoConcurrenteTest {
         MockHttpServletResponse perdedora = respuestas.stream().filter(r -> r.getStatus() == 409).findFirst()
                 .orElseThrow();
         String ganador = jdbc.queryForObject("""
-                SELECT e.nombre_completo FROM habitaciones h JOIN empleados e ON e.id = h.limpieza_empleado_id
+                SELECT e.full_name AS "nombre_completo" FROM rooms h JOIN employees e ON e.id = h.cleaning_employee_id
                 WHERE h.id = ?""", String.class, habitacion);
         assertThat(perdedora.getContentAsString()).contains("LIMPIEZA_EN_CURSO").contains(ganador);
         verify(eventos, timeout(2000).times(1)).habitacionCambio(habitacion);
@@ -108,20 +108,20 @@ class PisoConcurrenteTest {
     @Test
     void dosTecnicosTomanLaMismaIncidenciaYSoloUnoGana() throws Exception {
         long id = jdbc.queryForObject("""
-                INSERT INTO incidencias (habitacion_id, descripcion, impide_uso, reportada_por_empleado_id)
-                SELECT ?, 'Puerta trabada.', FALSE, id FROM empleados WHERE correo = 'luis.garcia@villaserena.test'
+                INSERT INTO incidents (room_id, description, blocks_use, reported_by_employee_id)
+                SELECT ?, 'Puerta trabada.', FALSE, id FROM employees WHERE email = 'luis.garcia@villaserena.test'
                 RETURNING id""", Long.class, habitacion);
         List<MockHttpServletResponse> respuestas = aLaVez("/api/v1/incidencias/" + id + "/tomar",
                 token("marta.xicara@villaserena.test"), token("pedro.coy@villaserena.test"));
 
         assertThat(respuestas).extracting(MockHttpServletResponse::getStatus).containsExactlyInAnyOrder(200, 409);
         String tecnico = jdbc.queryForObject("""
-                SELECT e.nombre_completo FROM incidencias i JOIN empleados e ON e.id = i.tecnico_id
+                SELECT e.full_name AS "nombre_completo" FROM incidents i JOIN employees e ON e.id = i.technician_id
                 WHERE i.id = ?""", String.class, id);
         assertThat(respuestas.stream().filter(r -> r.getStatus() == 409).findFirst().orElseThrow()
                 .getContentAsString()).contains("INCIDENCIA_TOMADA").contains(tecnico);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM historial_estados WHERE tipo_entidad = 'INCIDENCIA' "
-                + "AND id_entidad = ? AND estado_nuevo = 'EN_PROCESO'", Integer.class, id)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM status_history WHERE entity_type = 'INCIDENCIA' "
+                + "AND entity_id = ? AND new_status = 'EN_PROCESO'", Integer.class, id)).isEqualTo(1);
         // Tomar no cambia la habitación: no hay evento 4.
         verify(eventos, never()).habitacionCambio(Mockito.anyLong());
     }

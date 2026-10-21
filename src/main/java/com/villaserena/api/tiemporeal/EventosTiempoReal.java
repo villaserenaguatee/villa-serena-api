@@ -82,14 +82,14 @@ public class EventosTiempoReal implements PedidoEventos, HabitacionEventos {
     public void habitacionCambio(long habitacionId) {
         LocalDate hoy = LocalDate.now(reloj);
         jdbc.query("""
-                SELECT h.id, h.numero, h.piso, h.ocupacion, h.condicion,
-                       EXISTS (SELECT 1 FROM reservas r WHERE r.habitacion_id = h.id
-                               AND r.fecha_entrada = ? AND r.estado = 'CONFIRMADA') AS llega_hoy,
-                       EXISTS (SELECT 1 FROM reservas r WHERE r.habitacion_id = h.id
-                               AND r.fecha_salida = ? AND r.estado = 'EN_ESTADIA') AS sale_hoy,
-                       EXISTS (SELECT 1 FROM incidencias i WHERE i.habitacion_id = h.id
-                               AND i.estado <> 'RESUELTA') AS incidencia
-                FROM habitaciones h WHERE h.id = ?""",
+                SELECT h.id, h.number AS "numero", h.floor AS "piso", h.occupancy AS "ocupacion", h.condition AS "condicion",
+                       EXISTS (SELECT 1 FROM reservations r WHERE r.room_id = h.id
+                               AND r.checkin_date = ? AND r.status = 'CONFIRMADA') AS llega_hoy,
+                       EXISTS (SELECT 1 FROM reservations r WHERE r.room_id = h.id
+                               AND r.checkout_date = ? AND r.status = 'EN_ESTADIA') AS sale_hoy,
+                       EXISTS (SELECT 1 FROM incidents i WHERE i.room_id = h.id
+                               AND i.status <> 'RESUELTA') AS incidencia
+                 FROM rooms h WHERE h.id = ?""",
                 (rs, i) -> new HabitacionEvento(rs.getLong(1), rs.getString(2), rs.getInt(3), rs.getString(4),
                         rs.getString(5), rs.getBoolean(6), rs.getBoolean(7), rs.getBoolean(8)),
                 hoy, hoy, habitacionId).stream().findFirst()

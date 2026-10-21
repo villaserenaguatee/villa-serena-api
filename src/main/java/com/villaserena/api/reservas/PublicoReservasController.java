@@ -20,7 +20,7 @@ import com.villaserena.api.reservas.dto.PagoIniciado;
 import com.villaserena.api.reservas.dto.ReservaWebCreada;
 import com.villaserena.api.reservas.dto.ReservaWebPeticion;
 import com.villaserena.api.reservas.dto.TipoHabitacionReferencia;
-import com.villaserena.api.reservas.stripe.PagoStripeService;
+import com.villaserena.api.reservas.pagos.PagoOnlineService;
 
 import jakarta.validation.Valid;
 
@@ -32,18 +32,16 @@ public class PublicoReservasController {
     private final IdempotenciaReservas idempotencia;
     private final DisponibilidadService disponibilidad;
     private final ReservaService reservas;
-    private final PagoStripeService pagos;
+    private final PagoOnlineService pagos;
     private final java.time.Clock reloj;
-    private final VerificacionCorreoReserva verificacion;
 
     public PublicoReservasController(IdempotenciaReservas idempotencia, DisponibilidadService disponibilidad, ReservaService reservas,
-            PagoStripeService pagos, java.time.Clock reloj, VerificacionCorreoReserva verificacion) {
+            PagoOnlineService pagos, java.time.Clock reloj) {
         this.idempotencia = idempotencia;
         this.disponibilidad = disponibilidad;
         this.reservas = reservas;
         this.pagos = pagos;
         this.reloj = reloj;
-        this.verificacion = verificacion;
     }
 
     @GetMapping("/disponibilidad")
@@ -60,10 +58,9 @@ public class PublicoReservasController {
             @org.springframework.web.bind.annotation.RequestHeader(name="X-Booking-Draft", required=false) String draft,
             @org.springframework.web.bind.annotation.RequestHeader(name="X-Booking-Email-Verification", required=false) String receipt) {
         if(clave==null) throw com.villaserena.api.comun.ApiException.datosInvalidos("Identificador de solicitud obligatorio.",java.util.List.of());
-        return idempotencia.ejecutar("publico", clave, p, ReservaWebCreada.class, () -> {
-        verificacion.consumir(p.huesped().correo(),draft,receipt);
+        return idempotencia.ejecutarPublico("publico", clave, p, p.huesped().correo(), draft, receipt, () -> {
         Reserva reserva = reservas.crear(SolicitudReserva.web(p.tipoHabitacionId(), p.entrada(), p.salida(),
-                p.numeroHuespedes(), p.huesped()));
+                p.numeroHuespedes(), p.huesped(), p.horaEstimadaLlegadaLocal()));
         String tipo = disponibilidad.tipo(reserva.getTipoHabitacionId()).map(TipoHabitacionInfo::nombre).orElse("");
         return new ReservaWebCreada(reserva.getCodigo(), reserva.getEstado(),
                 new TipoHabitacionReferencia(reserva.getTipoHabitacionId(), tipo), reserva.getFechaEntrada(),

@@ -31,8 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.jayway.jsonpath.JsonPath;
 import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
-import com.villaserena.api.reservas.stripe.VencimientoReservasJob;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
+import com.villaserena.api.reservas.pagos.VencimientoReservasJob;
 
 /** Pruebas de OBJ-1B: disponibilidad, precio, reserva web, webhook y vencimiento a los 30 minutos. */
 @SpringBootTest
@@ -55,7 +55,7 @@ class ReservaWebIntegrationTest {
     VencimientoReservasJob vencimiento;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @Test
     void precioConFinDeSemana() throws Exception {
@@ -127,18 +127,18 @@ class ReservaWebIntegrationTest {
         assertThat((String) JsonPath.read(cuerpo, "$.pagoVenceEn")).startsWith("2026-10-05T12:30:00-06:00");
 
         Reserva reserva = reservas.findByCodigo(JsonPath.read(cuerpo, "$.codigo")).orElseThrow();
-        assertThat(jdbc.queryForObject("SELECT estado FROM cuentas WHERE reserva_id = ?", String.class,
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM accounts WHERE reservation_id = ?", String.class,
                 reserva.getId())).isEqualTo("ABIERTA");
         assertThat(jdbc.queryForObject("""
-                SELECT total FROM cargos c JOIN cuentas cu ON cu.id = c.cuenta_id
-                WHERE cu.reserva_id = ? AND c.tipo = 'ALOJAMIENTO'""", BigDecimal.class, reserva.getId()))
+                SELECT total  FROM charges c JOIN accounts cu ON cu.id = c.account_id
+                WHERE cu.reservation_id = ? AND c.type = 'ALOJAMIENTO'""", BigDecimal.class, reserva.getId()))
                 .isEqualByComparingTo("1912.50");
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM reserva_noches WHERE reserva_id = ?", Integer.class,
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM reservation_nights WHERE reservation_id = ?", Integer.class,
                 reserva.getId())).isEqualTo(2);
 
         // Mismo correo: se reutiliza el perfil del huésped sin cambiar sus datos.
         crearReserva(tipoId("Doble Superior"), "2026-10-20", "2026-10-21", "MARIA@correo.test", 201);
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM huespedes WHERE lower(correo) = 'maria@correo.test'",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM guests WHERE lower(email) = 'maria@correo.test'",
                 Integer.class)).isEqualTo(1);
     }
 
@@ -146,11 +146,11 @@ class ReservaWebIntegrationTest {
     void webhookRepetidoRegistraUnSoloPago() throws Exception {
         String codigo = iniciarPago("cs_test_1");
 
-        PasarelaStripe.Evento evento = new PasarelaStripe.Evento("evt_1", "checkout.session.completed",
-                new PasarelaStripe.Sesion("cs_test_1", null, "complete", true, "pi_1", null));
-        when(stripe.verificarEvento(anyString(), anyString())).thenReturn(evento);
+        PasarelaPagos.Evento evento = new PasarelaPagos.Evento("evt_1", "intent.succeeded",
+                new PasarelaPagos.Sesion("cs_test_1", null, "paid", true, "pi_1", null));
+        when(pasarela.verificarEvento(anyString(), any())).thenReturn(evento);
         for (int i = 0; i < 2; i++) {
-            mvc.perform(post("/api/v1/pagos/stripe/webhook").header("Stripe-Signature", "t=1,v1=x")
+            mvc.perform(post("/api/v1/pagos/recurrente/webhook").header("svix-id", "msg_test")
                             .contentType(MediaType.APPLICATION_JSON).content("{}"))
                     .andExpect(status().isOk());
         }
@@ -159,20 +159,20 @@ class ReservaWebIntegrationTest {
                 .andExpect(jsonPath("$.estadoReserva").value("CONFIRMADA"))
                 .andExpect(jsonPath("$.estadoPago").value("APROBADO"))
                 .andExpect(jsonPath("$.puedeReintentar").value(false));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM pagos WHERE estado = 'APROBADO' AND stripe_session_id = 'cs_test_1'",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM payments WHERE status = 'APROBADO' AND checkout_id = 'cs_test_1'",
                 Integer.class)).isEqualTo(1);
         assertThat(jdbc.queryForObject("""
-                SELECT count(*) FROM historial_estados h JOIN reservas r ON r.id = h.id_entidad
-                WHERE h.tipo_entidad = 'RESERVA' AND r.codigo = ? AND h.estado_nuevo = 'CONFIRMADA'""",
+                SELECT count(*)  FROM status_history h JOIN reservations r ON r.id = h.entity_id
+                WHERE h.entity_type = 'RESERVA' AND r.code = ? AND h.new_status = 'CONFIRMADA'""",
                 Integer.class, codigo)).isEqualTo(1);
     }
 
     @Test
     void firmaInvalidaResponde400() throws Exception {
-        when(stripe.verificarEvento(anyString(), anyString()))
+        when(pasarela.verificarEvento(anyString(), any()))
                 .thenThrow(new com.villaserena.api.comun.ApiException(org.springframework.http.HttpStatus.BAD_REQUEST,
-                        "FIRMA_INVALIDA", "La firma del aviso de Stripe no es válida."));
-        mvc.perform(post("/api/v1/pagos/stripe/webhook").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                        "FIRMA_INVALIDA", "La firma del aviso de Recurrente no es válida."));
+        mvc.perform(post("/api/v1/pagos/recurrente/webhook").contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("FIRMA_INVALIDA"));
     }
@@ -180,8 +180,8 @@ class ReservaWebIntegrationTest {
     @Test
     void reservaSinPagarSeCancelaALos30Minutos() throws Exception {
         String codigo = iniciarPago("cs_test_2");
-        when(stripe.expirarSesion("cs_test_2"))
-                .thenReturn(new PasarelaStripe.Sesion("cs_test_2", null, "expired", false, null, null));
+        when(pasarela.expirarSesion("cs_test_2"))
+                .thenReturn(new PasarelaPagos.Sesion("cs_test_2", null, "expired", false, null, null));
         envejecer(codigo, 31);
 
         vencimiento.cancelarVencidas();
@@ -190,15 +190,15 @@ class ReservaWebIntegrationTest {
                 .andExpect(jsonPath("$.estadoReserva").value("CANCELADA"))
                 .andExpect(jsonPath("$.estadoPago").value("FALLIDO"));
         assertThat(jdbc.queryForObject("""
-                SELECT c.estado FROM cuentas c JOIN reservas r ON r.id = c.reserva_id WHERE r.codigo = ?""",
+                SELECT c.status AS "estado" FROM accounts c JOIN reservations r ON r.id = c.reservation_id WHERE r.code = ?""",
                 String.class, codigo)).isEqualTo("CERRADA");
     }
 
     @Test
     void siYaEstabaPagadaSeConfirmaEnLugarDeCancelarse() throws Exception {
         String codigo = iniciarPago("cs_test_3");
-        when(stripe.expirarSesion("cs_test_3"))
-                .thenReturn(new PasarelaStripe.Sesion("cs_test_3", null, "complete", true, "pi_3", null));
+        when(pasarela.expirarSesion("cs_test_3"))
+                .thenReturn(new PasarelaPagos.Sesion("cs_test_3", null, "paid", true, "pi_3", null));
         envejecer(codigo, 31);
 
         vencimiento.cancelarVencidas();
@@ -218,26 +218,176 @@ class ReservaWebIntegrationTest {
         assertThat(reservas.findByCodigo(codigo).orElseThrow().getEstado()).isEqualTo(EstadoReserva.PENDIENTE_PAGO);
     }
 
+    @Test
+    void creaReservaWebSinNacionalidadYConservaElPerfilHistorico() throws Exception {
+        crearReserva(tipoId("Estándar Jardín"), "2026-10-20", "2026-10-22", "nuevo@correo.test", 201);
+        assertThat(jdbc.queryForObject("SELECT nationality AS \"nacionalidad\" FROM guests WHERE email = 'nuevo@correo.test'",
+                String.class)).isNull();
+        jdbc.update("UPDATE guests SET nationality = 'Mexicana' WHERE email = 'nuevo@correo.test'");
+        crearReserva(tipoId("Estándar Jardín"), "2026-10-23", "2026-10-24", "nuevo@correo.test", 201);
+        assertThat(jdbc.queryForObject("SELECT nationality AS \"nacionalidad\" FROM guests WHERE email = 'nuevo@correo.test'",
+                String.class)).isEqualTo("Mexicana");
+    }
+
+    @Test
+    void checkoutVencidoMarcaPagoFallidoSinConfirmarReserva() throws Exception {
+        String codigo = iniciarPago("ch_vencido");
+        when(pasarela.verificarEvento(anyString(), any())).thenReturn(new PasarelaPagos.Evento(
+                "msg_vencido", "checkout.expired",
+                new PasarelaPagos.Sesion("ch_vencido", null, "expired", false, null, null)));
+        mvc.perform(post("/api/v1/pagos/recurrente/webhook").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/publico/reservas/{codigo}/estado", codigo))
+                .andExpect(jsonPath("$.estadoReserva").value("PENDIENTE_PAGO"))
+                .andExpect(jsonPath("$.estadoPago").value("FALLIDO"));
+    }
+
+    @Test
+    void pagoEnProcesoImpideCrearOtroCheckout() throws Exception {
+        String codigo = iniciarPago("ch_en_proceso");
+        when(pasarela.obtenerSesion("ch_en_proceso")).thenReturn(new PasarelaPagos.Sesion(
+                "ch_en_proceso", null, "payment_in_progress", false, null, null));
+        mvc.perform(post("/api/v1/publico/reservas/{codigo}/pago", codigo))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("PAGO_EN_VERIFICACION"));
+        org.mockito.Mockito.verify(pasarela, org.mockito.Mockito.times(1))
+                .crearSesion(anyString(), any(), anyString(), any(), any());
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM payments WHERE checkout_id = 'ch_en_proceso'", String.class))
+                .isEqualTo("PENDIENTE");
+    }
+
+    @Test
+    void reservaFueraDePlazoNoPermiteIniciarPago() throws Exception {
+        String codigo = iniciarPago("ch_fuera_plazo");
+        envejecer(codigo, 31);
+        mvc.perform(post("/api/v1/publico/reservas/{codigo}/pago", codigo))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("PLAZO_PAGO_VENCIDO"));
+    }
+
+    @Test
+    void rutaAnteriorDeStripeNoQuedaPublica() throws Exception {
+        mvc.perform(post("/api/v1/pagos/stripe/webhook").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void montoDistintoNoConfirmaLaReserva() throws Exception {
+        String codigo = iniciarPago("ch_monto_distinto");
+        when(pasarela.verificarEvento(anyString(), any())).thenReturn(new PasarelaPagos.Evento(
+                "msg_monto_distinto", "intent.succeeded", new PasarelaPagos.Sesion("ch_monto_distinto", null,
+                "paid", true, "in_distinto", null, new BigDecimal("0.01"), "GTQ")));
+        mvc.perform(post("/api/v1/pagos/recurrente/webhook").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.codigo").value("PAGO_NO_COINCIDE"));
+        assertThat(reservas.findByCodigo(codigo).orElseThrow().getEstado()).isEqualTo(EstadoReserva.PENDIENTE_PAGO);
+    }
+
+    @Test
+    void consultaDistingueContinuarProcesarYEsperarWebhookSinMutaciones() throws Exception {
+        String codigo = iniciarPago("ch_consulta");
+        for (String estado : new String[]{"unpaid", "payment_in_progress", "paid", "expired"}) {
+            when(pasarela.obtenerSesion("ch_consulta")).thenReturn(new PasarelaPagos.Sesion(
+                    "ch_consulta", "https://pago.test", estado, "paid".equals(estado), null,
+                    RelojFijoConfig.AHORA.plusSeconds(600)));
+            String accion = switch (estado) {
+                case "unpaid" -> "CONTINUAR";
+                case "expired" -> "REINTENTAR";
+                default -> "ESPERAR";
+            };
+            mvc.perform(get("/api/v1/publico/reservas/{codigo}/estado", codigo))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.accionPago").value(accion))
+                    .andExpect(jsonPath("$.puedeReintentar").value("expired".equals(estado)))
+                    .andExpect(jsonPath("$.estadoPago").value("PENDIENTE"));
+        }
+        assertThat(reservas.findByCodigo(codigo).orElseThrow().getEstado()).isEqualTo(EstadoReserva.PENDIENTE_PAGO);
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM payments WHERE checkout_id='ch_consulta'", Integer.class)).isEqualTo(1);
+    }
+
+    @Test
+    void consultaFueraDePlazoNoPermiteOtroIntentoAunqueElJobNoHayaCancelado() throws Exception {
+        String codigo = iniciarPago("ch_tarde");
+        envejecer(codigo, 31);
+        when(pasarela.obtenerSesion("ch_tarde")).thenReturn(new PasarelaPagos.Sesion(
+                "ch_tarde", null, "expired", false, null, null));
+        mvc.perform(get("/api/v1/publico/reservas/{codigo}/estado", codigo))
+                .andExpect(jsonPath("$.estadoReserva").value("PENDIENTE_PAGO"))
+                .andExpect(jsonPath("$.accionPago").value("NINGUNA"))
+                .andExpect(jsonPath("$.puedeReintentar").value(false));
+    }
+
+    @Test
+    void consultarErrorDePasarelaNoHabilitaPago() throws Exception {
+        String codigo = iniciarPago("ch_error");
+        when(pasarela.obtenerSesion("ch_error")).thenThrow(
+                new com.villaserena.api.reservas.pagos.ErrorPasarela("No disponible"));
+        mvc.perform(get("/api/v1/publico/reservas/{codigo}/estado", codigo))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estadoCheckout").value("NO_VERIFICADO"))
+                .andExpect(jsonPath("$.accionPago").value("ESPERAR"))
+                .andExpect(jsonPath("$.puedeReintentar").value(false))
+                .andExpect(jsonPath("$.urlPago").doesNotExist());
+    }
+
+    @Test
+    void checkoutVencidoPorFechaNoSeRetomaHastaConfirmarExpired() throws Exception {
+        String codigo = iniciarPago("ch_vencimiento_incierto");
+        when(pasarela.obtenerSesion("ch_vencimiento_incierto")).thenReturn(new PasarelaPagos.Sesion(
+                "ch_vencimiento_incierto", "https://pago.test", "unpaid", false, null, RelojFijoConfig.AHORA));
+        mvc.perform(post("/api/v1/publico/reservas/{codigo}/pago", codigo))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.codigo").value("PAGO_EN_VERIFICACION"));
+        org.mockito.Mockito.verify(pasarela, org.mockito.Mockito.times(1))
+                .crearSesion(anyString(), any(), anyString(), any(), any());
+    }
+
+    @Test
+    void checkoutAbiertoSeReutilizaYExpiredPermiteOtroDentroDelPlazo() throws Exception {
+        String codigo = iniciarPago("ch_anterior");
+        when(pasarela.obtenerSesion("ch_anterior")).thenReturn(new PasarelaPagos.Sesion(
+                "ch_anterior", "https://pago.test/anterior", "unpaid", false, null,
+                RelojFijoConfig.AHORA.plusSeconds(600)));
+        mvc.perform(post("/api/v1/publico/reservas/{codigo}/pago", codigo))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.urlPago").value("https://pago.test/anterior"));
+        org.mockito.Mockito.verify(pasarela, org.mockito.Mockito.times(1))
+                .crearSesion(anyString(), any(), anyString(), any(), any());
+        when(pasarela.obtenerSesion("ch_anterior")).thenReturn(new PasarelaPagos.Sesion(
+                "ch_anterior", null, "expired", false, null, null));
+        when(pasarela.crearSesion(anyString(), any(), anyString(), any(), any())).thenReturn(
+                new PasarelaPagos.Sesion("ch_nuevo", "https://pago.test/nuevo", "unpaid", false, null,
+                        RelojFijoConfig.AHORA.plusSeconds(1200)));
+        mvc.perform(post("/api/v1/publico/reservas/{codigo}/pago", codigo))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.urlPago").value("https://pago.test/nuevo"));
+        when(pasarela.obtenerSesion("ch_nuevo")).thenReturn(new PasarelaPagos.Sesion(
+                "ch_nuevo", "https://pago.test/nuevo", "unpaid", false, null,
+                RelojFijoConfig.AHORA.plusSeconds(1200)));
+        mvc.perform(get("/api/v1/publico/reservas/{codigo}/estado", codigo))
+                .andExpect(jsonPath("$.accionPago").value("CONTINUAR"))
+                .andExpect(jsonPath("$.urlPago").value("https://pago.test/nuevo"));
+        assertThat(jdbc.queryForObject("SELECT status AS \"estado\" FROM payments WHERE checkout_id='ch_anterior'", String.class))
+                .isEqualTo("FALLIDO");
+    }
+
     private String iniciarPago(String sesionId) throws Exception {
         String cuerpo = crearReserva(tipoId("Estándar Jardín"), "2026-10-20", "2026-10-22",
                 sesionId + "@correo.test", 201);
         String codigo = JsonPath.read(cuerpo, "$.codigo");
-        when(stripe.crearSesion(anyString(), any(), anyString(), any(), any()))
-                .thenReturn(new PasarelaStripe.Sesion(sesionId, "https://checkout.stripe.com/c/pay/" + sesionId,
-                        "open", false, null, Instant.now().plusSeconds(1800)));
+        when(pasarela.crearSesion(anyString(), any(), anyString(), any(), any()))
+                .thenReturn(new PasarelaPagos.Sesion(sesionId, "https://app.recurrente.com/checkout-session/" + sesionId,
+                        "unpaid", false, null, Instant.now().plusSeconds(1800)));
         mvc.perform(post("/api/v1/publico/reservas/{codigo}/pago", codigo))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.urlPago").value("https://checkout.stripe.com/c/pay/" + sesionId));
+                .andExpect(jsonPath("$.urlPago").value("https://app.recurrente.com/checkout-session/" + sesionId));
         return codigo;
     }
 
     private void envejecer(String codigo, int minutos) {
-        jdbc.update("UPDATE reservas SET creada_en = ? WHERE codigo = ?",
-                java.sql.Timestamp.from(RelojFijoConfig.AHORA.minusSeconds(minutos * 60L)), codigo);
+        Reserva reserva = reservas.findByCodigo(codigo).orElseThrow();
+        reserva.setCreadaEn(RelojFijoConfig.AHORA.minusSeconds(minutos * 60L));
+        reservas.saveAndFlush(reserva);
     }
 
     private long tipoId(String nombre) {
-        return jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = ?", Long.class, nombre);
+        return jdbc.queryForObject("SELECT id  FROM room_types WHERE name = ?", Long.class, nombre);
     }
 
     private String crearReserva(long tipoId, String entrada, String salida, String correo, int estado)
@@ -245,7 +395,7 @@ class ReservaWebIntegrationTest {
         String json = """
                 {"tipoHabitacionId": %d, "entrada": "%s", "salida": "%s", "numeroHuespedes": 1,
                  "huesped": {"nombreCompleto": "Cliente Prueba", "correo": "%s", "telefono": "+502 5555 0000",
-                             "nacionalidad": "Guatemalteca", "tipoDocumento": "DPI", "numeroDocumento": "1234567890101"}}"""
+                             "tipoDocumento": "DPI", "numeroDocumento": "1234567890101"}}"""
                 .formatted(tipoId, LocalDate.parse(entrada), LocalDate.parse(salida), correo);
         UUID borrador = UUID.randomUUID();
         return mvc.perform(post("/api/v1/publico/reservas").contentType(MediaType.APPLICATION_JSON).content(json)
@@ -265,8 +415,8 @@ class ReservaWebIntegrationTest {
         new java.security.SecureRandom().nextBytes(azar);
         String comprobante = Base64.getUrlEncoder().withoutPadding().encodeToString(azar);
         jdbc.update("""
-                INSERT INTO reserva_correo_verificaciones (id, correo, borrador, codigo_hash, creado_en, expira_en,
-                                                           verificado_en, comprobante_hash, comprobante_expira_en)
+                INSERT INTO reservation_email_verifications (id, email, draft, code_hash, created_at, expires_at,
+                                                           verified_at, proof_hash, proof_expires_at)
                 VALUES (?, lower(?), ?, 'NO_APLICA', ?, ?, ?, encode(sha256(convert_to(?, 'UTF8')), 'hex'), ?)""",
                 UUID.randomUUID(), correo, borrador, java.sql.Timestamp.from(RelojFijoConfig.AHORA),
                 java.sql.Timestamp.from(RelojFijoConfig.AHORA.plusSeconds(600)),

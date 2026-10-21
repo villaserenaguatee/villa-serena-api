@@ -2,9 +2,9 @@ name: API CI
 
 on:
   pull_request:
-    branches: [develop, main]
+    branches: [main, develop, dev]
   push:
-    branches: [develop, main]
+    branches: [main, develop, dev]
 
 permissions:
   contents: read
@@ -14,12 +14,61 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Read pinned contract revision
+        id: contract
+        run: node scripts/api-contract.mjs metadata
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.contract.outputs.repository }}
+          ref: ${{ steps.contract.outputs.revision }}
+          path: .contract/docs
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: "12.0.0"
+      - name: Install pinned contract tools
+        working-directory: .contract/docs
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Verify contract provenance and adoption scripts
+        run: |
+          node scripts/api-contract.mjs verify --docs .contract/docs
+          node --test scripts/api-contract.test.mjs
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Validate environment Compose files
+        env:
+          DB_PASSWORD: ci-configuration-only
+          JWT_SECRET: ci-configuration-only
+          GRAFANA_ADMIN_PASSWORD: ci-configuration-only
+          SPRING_DATASOURCE_PASSWORD: ci-configuration-only
+          WEB_URL: https://hotel.example
+          CORS_ORIGENES: https://hotel.example
+          IMAGE_URI: ghcr.io/example/api:ci
+        run: |
+          cp .env.local.example .env.local
+          cp .env.dev.example .env.dev
+          cp .env.prod.example .env.prod
+          docker compose --env-file .env.local -f compose.local.yml config --quiet
+          docker compose --env-file .env.dev -f compose.dev.yml config --quiet
+          docker compose --env-file .env.prod -f compose.prod.yml config --quiet
       - name: Maven verify
         run: |
           chmod +x mvnw
           ./mvnw -B verify
+      - name: Compare operations (diagnostic, reconciliation pending)
+        run: node scripts/api-contract.mjs check --docs .contract/docs --report-only
+      - name: Attach implementation and contract differences
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-contract-comparison
+          path: |
+            target/openapi-spring.json
+            target/contract-comparison.json
+          if-no-files-found: warn

@@ -7,10 +7,8 @@ spring:
       # claro); este tope solo corta subidas mucho mayores.
       max-file-size: 10MB
       max-request-size: 11MB
-  config:
-    # Lee el .env de la raíz del repositorio (fuera de Git) como archivo
-    # .properties. Si no existe, se usan las variables del entorno.
-    import: optional:file:.env[.properties]
+  profiles:
+    default: local
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/villaserena}
     username: ${DB_USER:villaserena}
@@ -26,7 +24,7 @@ spring:
         jdbc:
           time_zone: UTC
   mail:
-    # Mailpit del Docker local (villa-serena-infra): SMTP sin autenticación.
+    # Mailpit en dev: SMTP sin autenticación.
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
     username: ${MAIL_USER:}
@@ -42,10 +40,7 @@ spring:
           timeout: 5000
           writetimeout: 5000
   flyway:
-    # Solo el esquema. Los datos ficticios de la demostración (db/demo) y los
-    # hashes que necesitan se declaran únicamente en los perfiles que los usan:
-    # "demo" (application-demo.yaml) y "test" (application-test.yaml). Así una
-    # configuración de producción arranca sin conocer ningún secreto de demo.
+    # All profiles migrate the schema only. Local fixtures are loaded explicitly.
     locations: classpath:db/migration
 
 server:
@@ -76,6 +71,7 @@ villaserena:
     intentos-maximos: 5
     bloqueo-minutos: 15
   primer-admin:
+    habilitado: ${BOOTSTRAP_ADMIN_ENABLED:false}
     correo: ${ADMIN_EMAIL:}
     nombre: ${ADMIN_NAME:}
     contrasena: ${ADMIN_PASSWORD:}
@@ -83,17 +79,19 @@ villaserena:
   reservas:
     # 30 minutos (PAR-06). Para probar puedes bajarlo en tu .env.
     minutos-pago: ${MINUTOS_PAGO:30}
-  stripe:
-    clave-secreta: ${STRIPE_SECRET_KEY:}
-    webhook-secreto: ${STRIPE_WEBHOOK_SECRET:}
+  recurrente:
+    clave-publica: ${RECURRENTE_PUBLIC_KEY:}
+    clave-secreta: ${RECURRENTE_SECRET_KEY:}
+    webhook-secreto: ${RECURRENTE_WEBHOOK_SECRET:}
     url-retorno-app: ${APP_URL_RETORNO:villaserena://pago-resultado}
   archivos:
-    url-publica: ${ARCHIVOS_URL_PUBLICA:http://localhost:9000/villaserena-publico}
-    # MinIO del Docker local (villa-serena-infra), mismas variables que su .env.
-    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
-    usuario: ${MINIO_ROOT_USER:villaserena}
-    contrasena: ${MINIO_ROOT_PASSWORD:}
-    bucket-privado: ${MINIO_BUCKET_PRIVATE:villaserena-privado}
+    url-publica: ${ARCHIVOS_URL_PUBLICA:}
+    endpoint: ${STORAGE_ENDPOINT:}
+    region: ${STORAGE_REGION:us-east-1}
+    usuario: ${STORAGE_ACCESS_KEY_ID:}
+    contrasena: ${STORAGE_SECRET_ACCESS_KEY:}
+    estilo-ruta: ${STORAGE_PATH_STYLE:false}
+    bucket-privado: ${STORAGE_BUCKET_PRIVATE:}
     # Vigencia de la URL firmada de las fotos privadas (incidencias).
     minutos-url-firmada: 10
   notificaciones:
@@ -102,10 +100,20 @@ villaserena:
     # API de Expo para las push de la app (HU-HUE-17). En las pruebas se apunta
     # a un servidor local.
     expo-push-url: ${EXPO_PUSH_URL:https://exp.host/--/api/v2/push/send}
-    app-descarga-url: ${APP_DOWNLOAD_URL:http://localhost:9000/villaserena-publico/app/villaserena.apk}
+    app-descarga-url: ${APP_DOWNLOAD_URL:}
     # Reintentos del Outbox (RN-NOT-003): 5 intentos, esperando 1 minuto más
     # cada vez (1, 2, 3, 4 minutos) antes de darlos por FALLIDO.
     intentos-maximos: 5
     espera-minutos: 1
     # Cuántos correos pendientes toma cada vuelta del proceso programado.
     lote: 20
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local | dev
+logging:
+  level:
+    root: INFO
+    com.villaserena.api: DEBUG

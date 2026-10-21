@@ -23,7 +23,7 @@ import com.villaserena.api.reservas.MetodoPago;
  * (la emisión) para que el check-out pueda reemplazar la emisión sin tocar esto.
  * <p>
  * El PDF no se genera al emitir: se arma al pedir la descarga (y al enviar el
- * correo), así el check-out no depende de MinIO.
+ * correo), así el check-out no depende del almacenamiento remoto.
  */
 @Service
 public class FacturaConsultaService {
@@ -54,14 +54,13 @@ public class FacturaConsultaService {
     @Transactional(readOnly = true)
     public FacturaDetalle detalle(long id) {
         Cabecera c = jdbc.query("""
-                SELECT f.id, s.serie, f.numero, f.emitida_en, r.codigo, f.nit_comprador, f.nombre_comprador, f.total,
-                       f.nombre_comercial, f.razon_social, f.nit_hotel, f.direccion_fiscal, f.cuenta_id,
-                       h.nombre, h.telefono, h.correo
-                FROM facturas f
-                JOIN series_factura s ON s.id = f.serie_id
-                JOIN cuentas cu ON cu.id = f.cuenta_id
-                JOIN reservas r ON r.id = cu.reserva_id
-                LEFT JOIN configuracion_hotel h ON h.id = 1
+                SELECT f.id, s.series AS "serie", f.number AS "numero", f.issued_at AS "emitida_en", r.code AS "codigo", f.buyer_tax_id AS "nit_comprador", f.buyer_name AS "nombre_comprador", f.total,
+                       f.trade_name AS "nombre_comercial", f.legal_name AS "razon_social", f.hotel_tax_id AS "nit_hotel", f.tax_address AS "direccion_fiscal", f.account_id AS "cuenta_id",
+                       h.name AS "nombre", h.phone AS "telefono", h.email AS "correo" FROM invoices f
+                JOIN invoice_series s ON s.id = f.series_id
+                JOIN accounts cu ON cu.id = f.account_id
+                JOIN reservations r ON r.id = cu.reservation_id
+                LEFT JOIN hotel_configuration h ON h.id = 1
                 WHERE f.id = ?""",
                 (rs, i) -> new Cabecera(rs.getLong(1), rs.getString(2), rs.getInt(3), fecha(rs.getTimestamp(4)),
                         rs.getString(5), new FacturaDetalle.Comprador(rs.getString(6), rs.getString(7)),
@@ -71,14 +70,14 @@ public class FacturaConsultaService {
                         rs.getLong(13)),
                 id).stream().findFirst().orElseThrow(ApiException::noEncontrado);
         List<FacturaDetalle.Cargo> cargos = jdbc.query("""
-                SELECT concepto, cantidad, precio_unitario, total FROM cargos
-                WHERE cuenta_id = ? AND estado = 'VIGENTE' ORDER BY creado_en, id""",
+                SELECT concept AS "concepto", quantity AS "cantidad", unit_price AS "precio_unitario", total  FROM charges
+                WHERE account_id = ? AND status = 'VIGENTE' ORDER BY created_at, id""",
                 (rs, i) -> new FacturaDetalle.Cargo(rs.getString(1), rs.getInt(2), rs.getBigDecimal(3),
                         rs.getBigDecimal(4)),
                 c.cuentaId());
         List<FacturaDetalle.Pago> pagos = jdbc.query("""
-                SELECT metodo, monto FROM pagos WHERE cuenta_id = ? AND estado = 'APROBADO'
-                ORDER BY coalesce(aprobado_en, creado_en), id""",
+                SELECT method AS "metodo", amount AS "monto" FROM payments WHERE account_id = ? AND status = 'APROBADO'
+                ORDER BY coalesce(approved_at, created_at), id""",
                 (rs, i) -> new FacturaDetalle.Pago(MetodoPago.valueOf(rs.getString(1)), rs.getBigDecimal(2)),
                 c.cuentaId());
         return new FacturaDetalle(c.id(), "EMITIDA", c.serie(), c.numero(), c.emitidaEn(), c.codigoReserva(),
@@ -90,9 +89,9 @@ public class FacturaConsultaService {
     @Transactional(readOnly = true)
     public FacturaDetalle deReservaDelHuesped(String codigo, long huespedId) {
         return detalle(jdbc.queryForList("""
-                SELECT f.id FROM facturas f JOIN cuentas cu ON cu.id = f.cuenta_id
-                JOIN reservas r ON r.id = cu.reserva_id
-                WHERE r.codigo = ? AND r.huesped_id = ?""", Long.class, codigo, huespedId)
+                SELECT f.id  FROM invoices f JOIN accounts cu ON cu.id = f.account_id
+                JOIN reservations r ON r.id = cu.reservation_id
+                WHERE r.code = ? AND r.guest_id = ?""", Long.class, codigo, huespedId)
                 .stream().findFirst().orElseThrow(ApiException::noEncontrado));
     }
 
@@ -100,9 +99,9 @@ public class FacturaConsultaService {
     @Transactional(readOnly = true)
     public void comprobarDuenoHuesped(long facturaId, long huespedId) {
         boolean propia = jdbc.queryForObject("""
-                SELECT EXISTS (SELECT 1 FROM facturas f JOIN cuentas cu ON cu.id = f.cuenta_id
-                               JOIN reservas r ON r.id = cu.reserva_id
-                               WHERE f.id = ? AND r.huesped_id = ?)""", Boolean.class, facturaId, huespedId);
+                SELECT EXISTS (SELECT 1 FROM invoices f JOIN accounts cu ON cu.id = f.account_id
+                               JOIN reservations r ON r.id = cu.reservation_id
+                               WHERE f.id = ? AND r.guest_id = ?)""", Boolean.class, facturaId, huespedId);
         if (!propia) {
             throw ApiException.noEncontrado();
         }
@@ -126,7 +125,7 @@ public class FacturaConsultaService {
     }
 
     private String asegurarPdf(long id) {
-        List<String> filas = jdbc.queryForList("SELECT clave_pdf FROM facturas WHERE id = ? FOR UPDATE",
+        List<String> filas = jdbc.queryForList("SELECT pdf_key AS \"clave_pdf\" FROM invoices WHERE id = ? FOR UPDATE",
                 String.class, id);
         if (filas.isEmpty()) {
             throw ApiException.noEncontrado();
@@ -142,7 +141,7 @@ public class FacturaConsultaService {
                 throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "ARCHIVOS_NO_DISPONIBLES",
                         "No se pudo preparar el PDF en este momento. Intenta de nuevo.");
             }
-            jdbc.update("UPDATE facturas SET clave_pdf = ? WHERE id = ?", clave, id);
+            jdbc.update("UPDATE invoices SET pdf_key = ? WHERE id = ?", clave, id);
         }
         return clave;
     }

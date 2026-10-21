@@ -68,13 +68,12 @@ public class TarifaService {
 
     private List<Temporada> temporadasDelRango(long tipoId, LocalDate entrada, LocalDate salida) {
         return jdbc.query("""
-                SELECT t.nombre, t.fecha_inicio, t.fecha_fin, t.ajuste_pct
-                FROM temporadas t
-                WHERE t.activa AND t.fecha_inicio < ? AND t.fecha_fin >= ?
-                  AND (t.aplica_a_todos OR EXISTS (
-                        SELECT 1 FROM temporada_tipos_habitacion tt
-                        WHERE tt.temporada_id = t.id AND tt.tipo_habitacion_id = ?))
-                ORDER BY t.fecha_inicio""",
+                SELECT t.name AS "nombre", t.start_date AS "fecha_inicio", t.end_date AS "fecha_fin", t.adjustment_pct AS "ajuste_pct" FROM seasons t
+                WHERE t.active AND t.start_date < ? AND t.end_date >= ?
+                  AND (t.applies_to_all OR EXISTS (
+                        SELECT 1 FROM season_room_types tt
+                        WHERE tt.season_id = t.id AND tt.room_type_id = ?))
+                ORDER BY t.start_date""",
                 (rs, i) -> new Temporada(rs.getString(1), rs.getObject(2, LocalDate.class),
                         rs.getObject(3, LocalDate.class), rs.getBigDecimal(4)),
                 salida, entrada, tipoId);

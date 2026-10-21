@@ -81,12 +81,7 @@
 			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.stripe</groupId>
-			<artifactId>stripe-java</artifactId>
-			<version>34.0.0</version>
-		</dependency>
-		<dependency>
-			<!-- MinIO (API S3): fotos privadas de incidencias con URL firmada. -->
+			<!-- R2/S3: archivos privados con URLs firmadas. -->
 			<groupId>software.amazon.awssdk</groupId>
 			<artifactId>s3</artifactId>
 			<version>2.55.0</version>

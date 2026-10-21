@@ -1,7 +1,7 @@
 package com.villaserena.api.archivos;
 
 /**
- * Bucket privado de MinIO (fotos de incidencias). Las fotos privadas nunca tienen una
+ * Bucket privado de R2/S3 (fotos de incidencias y facturas). Las fotos privadas nunca tienen una
  * URL permanente: se entregan con una URL firmada de corta duración.
  */
 public interface AlmacenArchivos {

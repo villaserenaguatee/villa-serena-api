@@ -12,9 +12,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Precio fijo de cada noche (tabla {@code reserva_noches}); las reservas de canal no tienen filas. */
+/** Precio fijo de cada noche (tabla {@code reservation_nights}); las reservas de canal no tienen filas. */
 @Entity
-@Table(name = "reserva_noches")
+@Table(name = "reservation_nights")
 @Getter
 @Setter
 public class ReservaNoche {
@@ -23,18 +23,18 @@ public class ReservaNoche {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "reserva_id", nullable = false)
+    @Column(name = "reservation_id", nullable = false)
     private Long reservaId;
 
-    @Column(nullable = false)
+    @Column(name = "date", nullable = false)
     private LocalDate fecha;
 
-    @Column(nullable = false)
+    @Column(name = "price", nullable = false)
     private BigDecimal precio;
 
-    @Column(name = "temporada_nombre")
+    @Column(name = "season_name")
     private String temporadaNombre;
 
-    @Column(name = "fin_de_semana", nullable = false)
+    @Column(name = "is_weekend", nullable = false)
     private boolean finDeSemana;
 }

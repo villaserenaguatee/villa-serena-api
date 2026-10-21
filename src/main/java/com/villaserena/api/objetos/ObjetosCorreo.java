@@ -26,12 +26,12 @@ public class ObjetosCorreo {
  /** Tras un envío interrumpido nunca asumimos que SMTP no lo recibió. */
  @Scheduled(fixedDelayString="PT10S",initialDelayString="PT15S")
  public void procesar(){
-  jdbc.update("UPDATE objetos_avisos SET estado='INCIERTO',ultimo_error='No se pudo confirmar el resultado. Revisa el envío antes de volver a contactar al huésped.' WHERE estado='ENVIANDO' AND iniciado_en<now()-interval '10 minutes'");
+  jdbc.update("UPDATE lost_item_notifications SET status='INCIERTO',last_error='No se pudo confirmar el resultado. Revisa el envío antes de volver a contactar al huésped.' WHERE status='ENVIANDO' AND started_at<now()-interval '10 minutes'");
   for(int i=0;i<5;i++){
    Map<String,Object> aviso=tx.execute(status->{
-    var rows=jdbc.queryForList("SELECT * FROM objetos_avisos WHERE estado='PENDIENTE' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED");
+    var rows=jdbc.queryForList("SELECT id,item_id AS \"objeto_id\",review AS \"revision\",reservation_id AS \"reserva_id\",guest_id AS \"huesped_id\",recipient AS \"destinatario\",data AS \"datos\",photo AS \"foto\",photo_mime AS \"foto_mime\",status AS \"estado\",attempts AS \"intentos\",last_error AS \"ultimo_error\",confirmed_by AS \"confirmado_por\",created_at AS \"creado_en\",started_at AS \"iniciado_en\",sent_at AS \"enviado_en\",message_id FROM lost_item_notifications WHERE status='PENDIENTE' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED");
     if(rows.isEmpty())return null;var row=rows.getFirst();
-    jdbc.update("UPDATE objetos_avisos SET estado='ENVIANDO',intentos=intentos+1,iniciado_en=now() WHERE id=?",row.get("id"));return row;
+    jdbc.update("UPDATE lost_item_notifications SET status='ENVIANDO',attempts=attempts+1,started_at=now() WHERE id=?",row.get("id"));return row;
    });
    if(aviso==null)return;
    String state="ENVIADO",error=null;boolean smtpStarted=false;
@@ -45,10 +45,10 @@ public class ObjetosCorreo {
    final String result=state,message=error;
    // ENVIANDO se confirmó antes de SMTP: una caída aquí no vuelve a ponerlo en cola.
    tx.executeWithoutResult(status->{
-    jdbc.queryForList("SELECT id FROM objetos_encontrados WHERE id=? FOR UPDATE",aviso.get("objeto_id"));
-    jdbc.update("UPDATE objetos_avisos SET estado=?,ultimo_error=?,enviado_en=CASE WHEN ?='ENVIADO' THEN now() ELSE NULL END WHERE id=?",result,message,result,aviso.get("id"));
-    jdbc.update("INSERT INTO objetos_envio_eventos(aviso_id,tipo,intento,resultado,error) VALUES(?,'RESULTADO_SMTP',?,?,?)",aviso.get("id"),((Number)aviso.get("intentos")).intValue()+1,result,message);
-    if(result.equals("ENVIADO"))jdbc.update("UPDATE objetos_encontrados SET notificado_en=(SELECT enviado_en FROM objetos_avisos WHERE id=?) WHERE id=?",aviso.get("id"),aviso.get("objeto_id"));
+    jdbc.queryForList("SELECT id  FROM lost_items WHERE id=? FOR UPDATE",aviso.get("objeto_id"));
+    jdbc.update("UPDATE lost_item_notifications SET status=?,last_error=?,sent_at=CASE WHEN ?='ENVIADO' THEN now() ELSE NULL END WHERE id=?",result,message,result,aviso.get("id"));
+    jdbc.update("INSERT INTO lost_item_delivery_events(notification_id,type,attempt,result,error) VALUES(?,'RESULTADO_SMTP',?,?,?)",aviso.get("id"),((Number)aviso.get("intentos")).intValue()+1,result,message);
+    if(result.equals("ENVIADO"))jdbc.update("UPDATE lost_items SET notified_at=(SELECT sent_at FROM lost_item_notifications WHERE id=?) WHERE id=?",aviso.get("id"),aviso.get("objeto_id"));
    });
   }
  }

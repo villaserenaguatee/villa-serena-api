@@ -22,13 +22,13 @@ public class CatalogoOfertas {
     }
     @SuppressWarnings("unchecked")
     public List<Map<String,Object>> catalogo() {
-        return jdbc.query("SELECT o.*,t.estado FROM catalogo_ofertas o JOIN tipos_habitacion t ON t.id=o.tipo_habitacion_id ORDER BY o.orden",(r,i)->{
+        return jdbc.query("SELECT o.slug,o.room_type_id AS \"tipo_habitacion_id\",o.base_price AS \"precio_base\",o.content AS \"contenido\",o.sort_order AS \"orden\",o.requirements AS \"requisitos\",t.status AS \"estado\" FROM catalog_offers o JOIN room_types t ON t.id=o.room_type_id ORDER BY o.sort_order",(r,i)->{
             Map<String,Object> data=new LinkedHashMap<>(json.readValue(r.getString("contenido"),Map.class));
             // Editorial review notes are internal, never amenities promised to a guest.
             data.remove("pendingFeatures");
             data.put("apiTypeId",r.getLong("tipo_habitacion_id"));data.put("price",r.getBigDecimal("precio_base"));
             boolean enabled="ACTIVO".equals(r.getString("estado"));
-            data.put("bookable",enabled && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM catalogo_oferta_habitaciones e JOIN habitaciones h ON h.id=e.habitacion_id JOIN caracteristicas_habitacion c ON c.habitacion_id=h.id JOIN catalogo_ofertas f ON f.slug=e.slug WHERE e.slug=? AND h.tipo_habitacion_id=? AND h.estado='ACTIVO' AND h.condicion<>'FUERA_DE_SERVICIO' AND c.contenido @> f.requisitos)",Boolean.class,r.getString("slug"),r.getLong("tipo_habitacion_id"))));
+            data.put("bookable",enabled && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM catalog_offer_rooms e JOIN rooms h ON h.id=e.room_id JOIN room_features c ON c.room_id=h.id JOIN catalog_offers f ON f.slug=e.slug WHERE e.slug=? AND h.room_type_id=? AND h.status='ACTIVO' AND h.condition<>'FUERA_DE_SERVICIO' AND c.content @> f.requirements)",Boolean.class,r.getString("slug"),r.getLong("tipo_habitacion_id"))));
             return data;
         });
     }
@@ -37,12 +37,12 @@ public class CatalogoOfertas {
     }
     private List<Long> libres(Map<String,Object> o,LocalDate entrada,LocalDate salida,boolean bloquear) {
         return jdbc.query("""
-            SELECT h.id FROM catalogo_oferta_habitaciones e JOIN habitaciones h ON h.id=e.habitacion_id
-            JOIN caracteristicas_habitacion c ON c.habitacion_id=h.id JOIN catalogo_ofertas f ON f.slug=e.slug
-            WHERE e.slug=? AND h.tipo_habitacion_id=? AND h.estado='ACTIVO' AND h.condicion<>'FUERA_DE_SERVICIO'
-            AND c.contenido @> f.requisitos
-            AND NOT EXISTS(SELECT 1 FROM reservas r WHERE r.habitacion_id=h.id
-              AND r.estado IN ('PENDIENTE_PAGO','CONFIRMADA','EN_ESTADIA') AND r.fecha_entrada<? AND r.fecha_salida>?)
+            SELECT h.id  FROM catalog_offer_rooms e JOIN rooms h ON h.id=e.room_id
+            JOIN room_features c ON c.room_id=h.id JOIN catalog_offers f ON f.slug=e.slug
+            WHERE e.slug=? AND h.room_type_id=? AND h.status='ACTIVO' AND h.condition<>'FUERA_DE_SERVICIO'
+            AND c.content @> f.requirements
+            AND NOT EXISTS(SELECT 1 FROM reservations r WHERE r.room_id=h.id
+              AND r.status IN ('PENDIENTE_PAGO','CONFIRMADA','EN_ESTADIA') AND r.checkin_date<? AND r.checkout_date>?)
             ORDER BY h.id
             """+(bloquear?" FOR UPDATE OF h":""),(r,i)->r.getLong(1),o.get("slug"),o.get("apiTypeId"),salida,entrada);
     }
@@ -71,9 +71,9 @@ public class CatalogoOfertas {
         disponibilidad.bloquearTipo(id);
         List<Long> elegibles=libres(o,p.entrada(),p.salida(),true);
         if(!Boolean.TRUE.equals(o.get("bookable")) || elegibles.isEmpty() || disponibilidad.cupo(id,p.entrada(),p.salida())<=0)throw ApiException.conflicto("SIN_DISPONIBILIDAD","No hay una habitación acreditada disponible para esta oferta.");
-        SolicitudReserva sol=new SolicitudReserva(id,p.entrada(),p.salida(),p.numeroHuespedes(),null,p.huesped(),elegibles.getFirst(),CanalReserva.DIRECTO_WEB,null,null,com.villaserena.api.comun.Responsable.CLIENTE);
+        SolicitudReserva sol=new SolicitudReserva(id,p.entrada(),p.salida(),p.numeroHuespedes(),null,p.huesped(),elegibles.getFirst(),CanalReserva.DIRECTO_WEB,null,null,com.villaserena.api.comun.Responsable.CLIENTE,p.horaEstimadaLlegadaLocal());
         Reserva reserva=reservas.crearOferta(sol,cotizar(o,p.entrada(),p.salida()),(String)o.get("name"));
-        jdbc.update("INSERT INTO reserva_ofertas(reserva_id,slug,contenido) VALUES (?,?,?::jsonb)",reserva.getId(),slug,json.writeValueAsString(o));
+        jdbc.update("INSERT INTO reservation_offers(reservation_id,slug,content) VALUES (?,?,?::jsonb)",reserva.getId(),slug,json.writeValueAsString(o));
         return reserva;
     }
 }

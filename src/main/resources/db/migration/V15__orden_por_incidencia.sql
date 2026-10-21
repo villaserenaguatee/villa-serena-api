@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX uq_incidencia_orden_activa ON gestion_registros((datos->>'incidenciaId')) WHERE tipo='ordenes' AND datos->>'incidenciaId' IS NOT NULL AND datos->>'estado' NOT IN ('cerrada','cancelada');

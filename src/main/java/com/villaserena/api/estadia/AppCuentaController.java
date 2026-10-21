@@ -19,6 +19,7 @@ import com.villaserena.api.reservas.CuentaService;
 import com.villaserena.api.reservas.ReservaService;
 import com.villaserena.api.reservas.dto.CuentaHuesped;
 import com.villaserena.api.reservas.dto.PagoIniciado;
+import com.villaserena.api.reservas.dto.ProcesoPago;
 
 import jakarta.validation.Valid;
 
@@ -66,5 +67,11 @@ public class AppCuentaController {
         return pagoSaldo.iniciar(checkout.reserva(codigo, UsuarioActual.id()))
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.noContent().build());
+    }
+
+    @GetMapping("/pago-saldo/estado")
+    public ProcesoPago estadoPagoSaldo(@PathVariable String codigo) {
+        ReservaService.validarCodigo(codigo);
+        return pagoSaldo.estado(checkout.reserva(codigo, UsuarioActual.id()));
     }
 }

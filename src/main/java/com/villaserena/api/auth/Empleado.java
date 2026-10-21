@@ -13,9 +13,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Empleado del hotel (tabla {@code empleados}, migración V1). */
+/** Empleado del hotel (tabla {@code employees}, migración V1). */
 @Entity
-@Table(name = "empleados")
+@Table(name = "employees")
 @Getter
 @Setter
 public class Empleado {
@@ -24,39 +24,39 @@ public class Empleado {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "nombre_completo", nullable = false)
+    @Column(name = "full_name", nullable = false)
     private String nombreCompleto;
 
-    @Column(nullable = false)
+    @Column(name = "email", nullable = false)
     private String correo;
 
-    @Column(nullable = false)
+    @Column(name = "phone", nullable = false)
     private String telefono;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "role", nullable = false)
     private RolEmpleado rol;
 
     @Enumerated(EnumType.STRING)
     private AreaMyl area;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private EstadoEmpleado estado = EstadoEmpleado.ACTIVO;
 
-    @Column(name = "contrasena_hash", nullable = false)
+    @Column(name = "password_hash", nullable = false)
     private String contrasenaHash;
 
-    @Column(name = "debe_cambiar_contrasena", nullable = false)
+    @Column(name = "must_change_password", nullable = false)
     private boolean debeCambiarContrasena = true;
 
-    @Column(name = "intentos_fallidos", nullable = false)
+    @Column(name = "failed_attempts", nullable = false)
     private int intentosFallidos;
 
-    @Column(name = "bloqueado_hasta")
+    @Column(name = "locked_until")
     private Instant bloqueadoHasta;
 
-    @Column(name = "creado_en", insertable = false, updatable = false)
+    @Column(name = "created_at", insertable = false, updatable = false)
     private Instant creadoEn;
 
     public boolean estaActivo() {

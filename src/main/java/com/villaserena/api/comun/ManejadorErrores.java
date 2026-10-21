@@ -27,6 +27,7 @@ public class ManejadorErrores {
 
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ErrorRespuesta> api(ApiException e) {
+        log.debug("Error HTTP: estado={}, codigo={}", e.getEstado().value(), e.getCodigo());
         return ResponseEntity.status(e.getEstado())
                 .body(new ErrorRespuesta(e.getCodigo(), e.getMessage(), e.getDetalles()));
     }
@@ -68,7 +69,10 @@ public class ManejadorErrores {
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
-    ResponseEntity<ErrorRespuesta> rutaInexistente(NoResourceFoundException e) {
+    ResponseEntity<ErrorRespuesta> rutaInexistente(NoResourceFoundException e,
+            jakarta.servlet.http.HttpServletRequest peticion) {
+        log.debug("Ruta no encontrada: {} {}", peticion.getMethod(),
+                peticion.getRequestURI().replace('\r', '_').replace('\n', '_'));
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ErrorRespuesta.de("NO_ENCONTRADO", "No se encontró el recurso solicitado."));
     }

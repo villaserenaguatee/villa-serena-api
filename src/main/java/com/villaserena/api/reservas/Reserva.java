@@ -3,7 +3,11 @@ package com.villaserena.api.reservas;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -16,9 +20,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Reserva (tabla {@code reservas}, V2). El EXCLUDE de la base impide traslapes por habitación. */
+/** Reserva (tabla {@code reservations}, V2). El EXCLUDE de la base impide traslapes por habitación. */
 @Entity
-@Table(name = "reservas")
+@Table(name = "reservations")
 @Getter
 @Setter
 public class Reserva {
@@ -27,51 +31,56 @@ public class Reserva {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Column(name = "code", nullable = false)
     private String codigo;
 
-    @Column(name = "huesped_id", nullable = false)
+    @Column(name = "guest_id", nullable = false)
     private Long huespedId;
 
-    @Column(name = "tipo_habitacion_id", nullable = false)
+    @Column(name = "room_type_id", nullable = false)
     private Long tipoHabitacionId;
 
-    @Column(name = "habitacion_id")
+    @Column(name = "room_id")
     private Long habitacionId;
 
-    @Column(name = "fecha_entrada", nullable = false)
+    @Column(name = "checkin_date", nullable = false)
     private LocalDate fechaEntrada;
 
-    @Column(name = "fecha_salida", nullable = false)
+    @Column(name = "checkout_date", nullable = false)
     private LocalDate fechaSalida;
 
-    @Column(name = "numero_huespedes", nullable = false)
+    @Column(name = "estimated_arrival_time")
+    // JDBC 4.2 conserva la hora local sin aplicar hibernate.jdbc.time_zone=UTC.
+    @JdbcTypeCode(SqlTypes.LOCAL_TIME)
+    private LocalTime horaEstimadaLlegada;
+
+    @Column(name = "guest_count", nullable = false)
     private int numeroHuespedes;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "status", nullable = false)
     private EstadoReserva estado;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "channel", nullable = false)
     private CanalReserva canal;
 
-    @Column(name = "identificador_externo")
+    @Column(name = "external_identifier")
     private String identificadorExterno;
 
-    @Column(nullable = false)
+    @Column(name = "total", nullable = false)
     private BigDecimal total;
 
-    @Column(name = "creada_por_empleado_id")
+    @Column(name = "created_by_employee_id")
     private Long creadaPorEmpleadoId;
 
-    @Column(name = "creada_en", nullable = false)
+    @Column(name = "created_at", nullable = false)
     private Instant creadaEn;
 
-    @Column(name = "habitacion_asignada_en")
+    @Column(name = "room_assigned_at")
     private Instant habitacionAsignadaEn;
 
-    @Column(name = "habitacion_asignada_por_empleado_id")
+    @Column(name = "room_assigned_by_employee_id")
     private Long habitacionAsignadaPorEmpleadoId;
 
     public int noches() {

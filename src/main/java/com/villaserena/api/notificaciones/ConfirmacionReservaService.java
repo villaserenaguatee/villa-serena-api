@@ -24,7 +24,7 @@ import com.villaserena.api.config.PropiedadesVillaSerena;
  * <p>
  * {@code ReservaService} llama a esta clase a través de
  * {@link ConfirmacionReservaNotifier} en los tres momentos en que una reserva
- * queda confirmada: el webhook de Stripe (web), Recepción y el canal.
+ * queda confirmada: el webhook de Recurrente (web), Recepción y el canal.
  */
 @Service
 public class ConfirmacionReservaService implements ConfirmacionReservaNotifier {
@@ -56,11 +56,10 @@ public class ConfirmacionReservaService implements ConfirmacionReservaNotifier {
     @Transactional(propagation = Propagation.MANDATORY)
     public void notificar(long reservaId) {
         List<Datos> encontrados = jdbc.query("""
-                SELECT r.codigo, r.fecha_entrada, r.fecha_salida, r.numero_huespedes, r.total, r.canal,
-                       t.nombre AS tipo, h.nombre_completo, h.correo
-                FROM reservas r
-                JOIN tipos_habitacion t ON t.id = r.tipo_habitacion_id
-                JOIN huespedes h ON h.id = r.huesped_id
+                SELECT r.code AS "codigo", r.checkin_date AS "fecha_entrada", r.checkout_date AS "fecha_salida", r.guest_count AS "numero_huespedes", r.total, r.channel AS "canal",
+                       t.name AS tipo, h.full_name AS "nombre_completo", h.email AS "correo" FROM reservations r
+                JOIN room_types t ON t.id = r.room_type_id
+                JOIN guests h ON h.id = r.guest_id
                 WHERE r.id = ?""",
                 (rs, i) -> new Datos(rs.getString("codigo"), rs.getObject("fecha_entrada", LocalDate.class),
                         rs.getObject("fecha_salida", LocalDate.class), rs.getInt("numero_huespedes"),

@@ -18,15 +18,15 @@ import com.villaserena.api.reservas.BusquedaReservasService;
 import com.villaserena.api.reservas.BusquedaReservasService.FiltroRapido;
 import com.villaserena.api.reservas.BusquedaReservasService.Filtros;
 import com.villaserena.api.reservas.dto.CalendarioReservas;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 /**
  * Con el perfil "demo", al arrancar con la base vacía se crean las reservas de prueba
  * (OBJ-2A, criterio 3). "Hoy" es el lunes 5 de octubre de 2026 (RelojFijoConfig).
  */
 @SpringBootTest
-@Import({TestcontainersConfiguration.class, RelojFijoConfig.class})
-@ActiveProfiles({"test", "demo"})
+@Import({TestcontainersConfiguration.class, RelojFijoConfig.class, ReservasDePrueba.class})
+@ActiveProfiles("test")
 class ReservasDePruebaTest {
 
     static final LocalDate HOY = LocalDate.of(2026, 10, 5);
@@ -41,31 +41,31 @@ class ReservasDePruebaTest {
     BusquedaReservasService busqueda;
 
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     @Test
     void creaDoceReservasDeLosCuatroCanalesYVariosEstados() {
-        assertThat(contar("SELECT count(*) FROM reservas")).isEqualTo(12);
-        assertThat(jdbc.queryForList("SELECT DISTINCT canal FROM reservas", String.class))
+        assertThat(contar("SELECT count(*)  FROM reservations")).isEqualTo(12);
+        assertThat(jdbc.queryForList("SELECT DISTINCT channel AS \"canal\" FROM reservations", String.class))
                 .containsExactlyInAnyOrder("DIRECTO_WEB", "RECEPCION", "BOOKING", "EXPEDIA");
-        assertThat(jdbc.queryForList("SELECT DISTINCT estado FROM reservas", String.class))
+        assertThat(jdbc.queryForList("SELECT DISTINCT status AS \"estado\" FROM reservations", String.class))
                 .containsExactlyInAnyOrder("CONFIRMADA", "EN_ESTADIA", "FINALIZADA", "CANCELADA");
         // Todas con su cuenta y el cargo por alojamiento; no quedan correos pendientes.
-        assertThat(contar("SELECT count(*) FROM cuentas")).isEqualTo(12);
-        assertThat(contar("SELECT count(*) FROM outbox")).isZero();
+        assertThat(contar("SELECT count(*)  FROM accounts")).isEqualTo(12);
+        assertThat(contar("SELECT count(*)  FROM outbox")).isZero();
         // Las fechas cubren este mes y el siguiente.
-        assertThat(contar("SELECT count(*) FROM reservas WHERE fecha_entrada >= '2026-11-01'")).isPositive();
-        assertThat(contar("SELECT count(*) FROM reservas WHERE fecha_salida <= '2026-10-05'")).isPositive();
+        assertThat(contar("SELECT count(*)  FROM reservations WHERE checkin_date >= '2026-11-01'")).isPositive();
+        assertThat(contar("SELECT count(*)  FROM reservations WHERE checkout_date <= '2026-10-05'")).isPositive();
     }
 
     @Test
     void elHuespedDeLaAppEstaEnEstadiaConLaHabitacionOcupada() {
         assertThat(jdbc.queryForObject("""
-                SELECT hab.ocupacion FROM reservas r
-                JOIN huespedes h ON h.id = r.huesped_id
-                JOIN habitaciones hab ON hab.id = r.habitacion_id
-                WHERE lower(h.correo) = ? AND r.estado = 'EN_ESTADIA'
-                  AND r.fecha_entrada < ? AND r.fecha_salida > ?""",
+                SELECT hab.occupancy AS "ocupacion" FROM reservations r
+                JOIN guests h ON h.id = r.guest_id
+                JOIN rooms hab ON hab.id = r.room_id
+                WHERE lower(h.email) = ? AND r.status = 'EN_ESTADIA'
+                  AND r.checkin_date < ? AND r.checkout_date > ?""",
                 String.class, ReservasDePrueba.CORREO_APP, HOY, HOY)).isEqualTo("OCUPADA");
     }
 
@@ -85,7 +85,7 @@ class ReservasDePruebaTest {
     @Test
     void noDuplicaSiYaHayReservas() throws Exception {
         reservasDePrueba.run(null);
-        assertThat(contar("SELECT count(*) FROM reservas")).isEqualTo(12);
+        assertThat(contar("SELECT count(*)  FROM reservations")).isEqualTo(12);
     }
 
     private static Filtros rapido(FiltroRapido filtro) {

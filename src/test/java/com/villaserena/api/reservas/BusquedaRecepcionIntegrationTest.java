@@ -17,6 +17,8 @@ import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -35,9 +37,11 @@ import com.villaserena.api.RelojFijoConfig;
 import com.villaserena.api.TestcontainersConfiguration;
 import com.villaserena.api.auth.EmpleadoRepository;
 import com.villaserena.api.auth.TokenService;
-import com.villaserena.api.reservas.stripe.PasarelaStripe;
+import com.villaserena.api.reservas.pagos.PasarelaPagos;
 
 import jakarta.persistence.EntityManager;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Pruebas de OBJ-2A: huéspedes, huéspedes adicionales, búsqueda de reservas, detalle y
@@ -68,8 +72,11 @@ class BusquedaRecepcionIntegrationTest {
     @Autowired
     EntityManager entityManager;
 
+    @Autowired
+    ObjectMapper json;
+
     @MockitoBean
-    PasarelaStripe stripe;
+    PasarelaPagos pasarela;
 
     String recepcion;
 
@@ -98,18 +105,81 @@ class BusquedaRecepcionIntegrationTest {
                 .andExpect(jsonPath("$.yaExistia").value(true))
                 .andExpect(jsonPath("$.huesped.nombreCompleto").value("María José López"))
                 .andExpect(jsonPath("$.huesped.numeroDocumento").value("2456789010101"));
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM huespedes WHERE lower(correo) = 'maria.lopez@correo.test'",
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM guests WHERE lower(email) = 'maria.lopez@correo.test'",
                 Integer.class)).isEqualTo(1);
     }
 
     @Test
-    void registrarExigeLosSeisDatos() throws Exception {
+    void registrarExigeLosDatosObligatorios() throws Exception {
         mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nombreCompleto\": \"Sin correo\", \"telefono\": \"1\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.codigo").value("DATOS_INVALIDOS"))
                 .andExpect(jsonPath("$.detalles[*].campo", hasItem("correo")));
+    }
+
+    /** Subconjunto acordado de HuespedDatos: cada campo requerido se comprueba por HTTP. */
+    @ParameterizedTest
+    @ValueSource(strings = {"nombreCompleto", "correo", "telefono", "tipoDocumento", "numeroDocumento"})
+    void cadaCampoRequeridoDelContratoRechazaOmisionYNulo(String campo) throws Exception {
+        ObjectNode body = (ObjectNode) json.readTree(huespedJson("Contrato Huésped", "contrato@correo.test",
+                "1234567890101"));
+        int anteriores = jdbc.queryForObject("SELECT count(*)  FROM guests", Integer.class);
+        body.remove(campo);
+        for (int variante = 0; variante < 2; variante++) {
+            if (variante == 1) body.putNull(campo);
+            mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
+                            .contentType(MediaType.APPLICATION_JSON).content(json.writeValueAsString(body)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.codigo").value("DATOS_INVALIDOS"))
+                    .andExpect(jsonPath("$.detalles[*].campo", hasItem(campo)));
+        }
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM guests", Integer.class)).isEqualTo(anteriores);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", ", \"nacionalidad\": null", ", \"nacionalidad\": \"   \""})
+    void registraYReservaSinNacionalidad(String campo) throws Exception {
+        String json = """
+                {"nombreCompleto": "Sin Nacionalidad", "correo": "sin-nacionalidad@correo.test",
+                 "telefono": "+502 5555 0000", "tipoDocumento": "DPI", "numeroDocumento": "1234567890101"%s}
+                """.formatted(campo);
+        String respuesta = mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.huesped.nacionalidad").isEmpty())
+                .andReturn().getResponse().getContentAsString();
+        long id = ((Number) JsonPath.read(respuesta, "$.huesped.id")).longValue();
+        assertThat(jdbc.queryForObject("SELECT nationality AS \"nacionalidad\" FROM guests WHERE id = ?", String.class, id))
+                .isNull();
+        String codigo = crearReserva(id, "Doble Superior", "2026-10-15", "2026-10-17", 2, null);
+        mvc.perform(post("/api/v1/reservas/{c}/huespedes-adicionales", codigo).header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"nombreCompleto": "Acompañante", "tipoDocumento": "DPI",
+                                 "numeroDocumento": "9876543210101"%s}
+                                """.formatted(campo)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nacionalidad").isEmpty());
+        assertThat(jdbc.queryForObject("SELECT nationality AS \"nacionalidad\" FROM additional_guests WHERE full_name = 'Acompañante'",
+                String.class)).isNull();
+        detalle(codigo).andExpect(status().isOk())
+                .andExpect(jsonPath("$.huesped.nacionalidad").isEmpty())
+                .andExpect(jsonPath("$.huespedesAdicionales[0].nacionalidad").isEmpty());
+    }
+
+    @Test
+    void omitirNacionalidadNoModificaElPerfilExistente() throws Exception {
+        long id = registrarId("Perfil Histórico", "historico@correo.test", "1234567890101");
+        String json = huespedJson("Otro Nombre", "historico@correo.test", "9876543210101")
+                .replace("\"nacionalidad\": \"Guatemalteca\", ", "");
+        mvc.perform(post("/api/v1/huespedes").header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON).content(json))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.yaExistia").value(true))
+                .andExpect(jsonPath("$.huesped.id").value(id))
+                .andExpect(jsonPath("$.huesped.nacionalidad").value("Guatemalteca"))
+                .andExpect(jsonPath("$.huesped.nombreCompleto").value("Perfil Histórico"));
     }
 
     @Test
@@ -150,7 +220,7 @@ class BusquedaRecepcionIntegrationTest {
     void adicionalesSoloEnReservasConfirmadasOEnEstadia() throws Exception {
         String codigo = crearReserva(huesped("titular@correo.test"), "Doble Superior", "2026-10-15", "2026-10-17",
                 3, null);
-        jdbc.update("UPDATE reservas SET estado = 'CANCELADA' WHERE codigo = ?", codigo);
+        jdbc.update("UPDATE reservations SET status = 'CANCELADA' WHERE code = ?", codigo);
         adicional(codigo, "Luis Pérez")
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.codigo").value("ESTADO_INVALIDO"));
@@ -169,7 +239,7 @@ class BusquedaRecepcionIntegrationTest {
         String gomez = crearReserva(registrarId("Ana Gómez", "ana@correo.test", "5550001110101"),
                 "Suite Volcán", "2026-10-20", "2026-10-22", 2, null);
         String canal = reservaDeCanal("Hans Müller", "BK-555", "2026-11-02", "2026-11-04");
-        jdbc.update("UPDATE reservas SET estado = 'CANCELADA' WHERE codigo = ?", gomez);
+        jdbc.update("UPDATE reservations SET status = 'CANCELADA' WHERE code = ?", gomez);
 
         buscar("texto=lópez").andExpect(codigos(lopez));
         buscar("texto=555000111").andExpect(codigos(gomez));
@@ -200,8 +270,8 @@ class BusquedaRecepcionIntegrationTest {
                 null);
         String sale = crearReserva(huesped("sale@correo.test"), "Suite Volcán", "2026-10-06", "2026-10-08", 1, null);
         jdbc.update("""
-                UPDATE reservas SET estado = 'EN_ESTADIA', fecha_entrada = '2026-10-03', fecha_salida = '2026-10-05'
-                WHERE codigo = ?""", sale);
+                UPDATE reservations SET status = 'EN_ESTADIA', checkin_date = '2026-10-03', checkout_date = '2026-10-05'
+                WHERE code = ?""", sale);
         crearReserva(huesped("manana@correo.test"), "Doble Superior", "2026-10-06", "2026-10-07", 1, null);
 
         buscar("rapido=LLEGAN_HOY").andExpect(codigos(llega));
@@ -269,13 +339,13 @@ class BusquedaRecepcionIntegrationTest {
                 null);
         String cancelada = crearReserva(huesped("cancelada@correo.test"), "Doble Superior", "2026-10-11",
                 "2026-10-12", 1, null);
-        jdbc.update("UPDATE reservas SET estado = 'CANCELADA' WHERE codigo = ?", cancelada);
+        jdbc.update("UPDATE reservations SET status = 'CANCELADA' WHERE code = ?", cancelada);
         String finalizada = crearReserva(huesped("fin@correo.test"), "Estándar Jardín", "2026-10-06", "2026-10-08",
                 1, habitacionId("101"));
-        jdbc.update("UPDATE reservas SET estado = 'FINALIZADA' WHERE codigo = ?", finalizada);
+        jdbc.update("UPDATE reservations SET status = 'FINALIZADA' WHERE code = ?", finalizada);
         String fuera = crearReserva(huesped("fuera@correo.test"), "Doble Superior", "2026-11-20", "2026-11-22", 1,
                 null);
-        jdbc.update("UPDATE habitaciones SET estado = 'INACTIVO' WHERE numero = '303'");
+        jdbc.update("UPDATE rooms SET status = 'INACTIVO' WHERE number = '303'");
 
         mvc.perform(get("/api/v1/reservas/calendario").header("Authorization", recepcion)
                         .param("desde", "2026-10-01").param("hasta", "2026-10-31"))
@@ -326,7 +396,7 @@ class BusquedaRecepcionIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON).content(adicionalJson("Luis")))
                     .andExpect(status().isForbidden());
         }
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM huespedes_adicionales", Integer.class)).isZero();
+        assertThat(jdbc.queryForObject("SELECT count(*)  FROM additional_guests", Integer.class)).isZero();
     }
 
     // ------------------------------------------------------------ apoyo
@@ -396,12 +466,12 @@ class BusquedaRecepcionIntegrationTest {
     /** Reserva del canal externo insertada directamente (sin pasar por la API del canal). */
     private String reservaDeCanal(String nombre, String identificador, String entrada, String salida) {
         long huesped = jdbc.queryForObject("""
-                INSERT INTO huespedes (nombre_completo, correo, telefono, nacionalidad, tipo_documento, numero_documento)
+                INSERT INTO guests (full_name, email, phone, nationality, document_type, document_number)
                 VALUES (?, ?, '+1 555 0100', 'Alemana', 'PASAPORTE', 'C4R7T2X91') RETURNING id""",
                 Long.class, nombre, identificador.toLowerCase() + "@canal.test");
         jdbc.update("""
-                INSERT INTO reservas (codigo, huesped_id, tipo_habitacion_id, fecha_entrada, fecha_salida,
-                                      numero_huespedes, estado, canal, identificador_externo, total)
+                INSERT INTO reservations (code, guest_id, room_type_id, checkin_date, checkout_date,
+                                      guest_count, status, channel, external_identifier, total)
                 VALUES ('VS-CANAL1', ?, ?, ?::date, ?::date, 1, 'CONFIRMADA', 'BOOKING', ?, 1500.00)""",
                 huesped, tipoId("Doble Superior"), entrada, salida, identificador);
         return "VS-CANAL1";
@@ -418,10 +488,10 @@ class BusquedaRecepcionIntegrationTest {
     }
 
     private long tipoId(String nombre) {
-        return jdbc.queryForObject("SELECT id FROM tipos_habitacion WHERE nombre = ?", Long.class, nombre);
+        return jdbc.queryForObject("SELECT id  FROM room_types WHERE name = ?", Long.class, nombre);
     }
 
     private long habitacionId(String numero) {
-        return jdbc.queryForObject("SELECT id FROM habitaciones WHERE numero = ?", Long.class, numero);
+        return jdbc.queryForObject("SELECT id  FROM rooms WHERE number = ?", Long.class, numero);
     }
 }

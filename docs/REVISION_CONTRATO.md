@@ -1,5 +1,9 @@
 # Revisión del contrato completo
 
+> Registro histórico. Sus comandos y conclusiones corresponden a la revisión de
+> octubre de 2026 descrita abajo. El contrato ahora vive solo en docs; para trabajo
+> actual se aplica [CONTRATO_API.md](CONTRATO_API.md), sin copiar YAML al API ni a frontends.
+
 ## Alcance y estado
 
 Propuesta OpenAPI 3.1, versión `0.2.0-propuesta`, preparada el 3 de octubre de 2026 en la rama `obj0-contrato-completo`.
@@ -62,7 +66,7 @@ Los nombres de rutas/campos añadidos, `/ws`, `ticket` y los payloads son decisi
 
 ## Verificación al 7 de octubre de 2026 (issue #12)
 
-La propuesta se fusionó en `develop` con el PR #6 y es el **contrato vigente** para los objetivos 0 a 4. El PR #2 (`obj0-contrato-openapi`, solo parte 1) quedó reemplazado: el PR #6 conserva sus 27 rutas sin cambios. El contrato no cambió en esta verificación.
+La propuesta se fusionó en `develop` con el PR #6 y fue la referencia de esa verificación para los objetivos 0 a 4. El PR #2 (`obj0-contrato-openapi`, solo parte 1) quedó reemplazado: el PR #6 conserva sus 27 rutas sin cambios. El contrato no cambió durante aquella verificación.
 
 | Criterio de la issue | Estado | Evidencia |
 |---|---|---|

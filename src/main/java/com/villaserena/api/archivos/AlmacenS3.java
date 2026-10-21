@@ -9,6 +9,10 @@ import com.villaserena.api.config.PropiedadesVillaSerena;
 
 import jakarta.annotation.PreDestroy;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
+import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -17,17 +21,14 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
-/**
- * {@link AlmacenArchivos} sobre MinIO con el AWS SDK (API S3). Usa rutas tipo
- * {@code endpoint/bucket/clave}, que es lo que MinIO espera. Los clientes se crean al
- * primer uso, así el API arranca aunque MinIO no esté encendido.
- */
+/** R2 en desarrollo y S3 en producción; las conexiones se crean al primer uso. */
 @Component
 public class AlmacenS3 implements AlmacenArchivos {
 
     private final PropiedadesVillaSerena.Archivos config;
     private volatile S3Client cliente;
     private volatile S3Presigner firmador;
+    private DefaultCredentialsProvider credencialesPredeterminadas;
 
     public AlmacenS3(PropiedadesVillaSerena propiedades) {
         this.config = propiedades.archivos();
@@ -71,34 +72,59 @@ public class AlmacenS3 implements AlmacenArchivos {
 
     private synchronized S3Client cliente() {
         if (cliente == null) {
-            cliente = S3Client.builder()
-                    .endpointOverride(URI.create(config.endpoint()))
-                    .region(Region.US_EAST_1)
+            validarBucket();
+            var builder = S3Client.builder()
+                    .region(Region.of(config.region()))
                     .credentialsProvider(credenciales())
                     .serviceConfiguration(rutas())
-                    .build();
+                    .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
+                    .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED);
+            if (!vacio(config.endpoint())) builder.endpointOverride(URI.create(config.endpoint()));
+            cliente = builder.build();
         }
         return cliente;
     }
 
     private synchronized S3Presigner firmador() {
         if (firmador == null) {
-            firmador = S3Presigner.builder()
-                    .endpointOverride(URI.create(config.endpoint()))
-                    .region(Region.US_EAST_1)
+            validarBucket();
+            var builder = S3Presigner.builder()
+                    .region(Region.of(config.region()))
                     .credentialsProvider(credenciales())
-                    .serviceConfiguration(rutas())
-                    .build();
+                    .serviceConfiguration(rutas());
+            if (!vacio(config.endpoint())) builder.endpointOverride(URI.create(config.endpoint()));
+            firmador = builder.build();
         }
         return firmador;
     }
 
-    private StaticCredentialsProvider credenciales() {
-        return StaticCredentialsProvider.create(AwsBasicCredentials.create(config.usuario(), config.contrasena()));
+    private AwsCredentialsProvider credenciales() {
+        if (vacio(config.usuario()) != vacio(config.contrasena())) {
+            throw new IllegalStateException("Configura juntas STORAGE_ACCESS_KEY_ID y STORAGE_SECRET_ACCESS_KEY.");
+        }
+        if (!vacio(config.usuario())) {
+            return StaticCredentialsProvider.create(AwsBasicCredentials.create(config.usuario(), config.contrasena()));
+        }
+        if (credencialesPredeterminadas == null) {
+            credencialesPredeterminadas = DefaultCredentialsProvider.builder().build();
+        }
+        return credencialesPredeterminadas;
     }
 
-    private static S3Configuration rutas() {
-        return S3Configuration.builder().pathStyleAccessEnabled(true).build();
+    private void validarBucket() {
+        if (vacio(config.bucketPrivado())) {
+            throw new IllegalStateException("Falta STORAGE_BUCKET_PRIVATE para usar archivos remotos.");
+        }
+    }
+
+    private static boolean vacio(String valor) {
+        return valor == null || valor.isBlank();
+    }
+
+    private S3Configuration rutas() {
+        // R2 requiere cargas sin chunked encoding; S3 también admite este formato.
+        return S3Configuration.builder().pathStyleAccessEnabled(config.estiloRuta())
+                .chunkedEncodingEnabled(false).build();
     }
 
     @PreDestroy
@@ -108,6 +134,9 @@ public class AlmacenS3 implements AlmacenArchivos {
         }
         if (firmador != null) {
             firmador.close();
+        }
+        if (credencialesPredeterminadas != null) {
+            credencialesPredeterminadas.close();
         }
     }
 }

@@ -20,7 +20,7 @@ hs_err_pid*
 *.iml
 *.ipr
 *.iws
-out/
+/out/
 .metadata
 .classpath
 .project
@@ -44,5 +44,7 @@ Thumbs.db
 
 .env.*
 !.env.example
+!.env.*.example
 .local/
+.contract/
 *.private.*

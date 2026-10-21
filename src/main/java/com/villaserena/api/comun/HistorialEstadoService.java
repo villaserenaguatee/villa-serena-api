@@ -29,8 +29,8 @@ public class HistorialEstadoService {
     public void registrar(TipoEntidadHistorial entidad, long idEntidad, String anterior, String nuevo,
             Responsable responsable, String motivo) {
         jdbc.update("""
-                INSERT INTO historial_estados
-                    (tipo_entidad, id_entidad, estado_anterior, estado_nuevo, tipo_responsable, id_responsable, motivo)
+                INSERT INTO status_history
+                    (entity_type, entity_id, previous_status, new_status, responsible_type, responsible_id, reason)
                 VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 entidad.name(), idEntidad, anterior, nuevo,
                 responsable.tipo().name(), responsable.empleadoId(), motivo);

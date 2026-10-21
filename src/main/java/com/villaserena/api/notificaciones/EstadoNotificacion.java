@@ -1,6 +1,6 @@
 package com.villaserena.api.notificaciones;
 
-/** Estado de un registro del Outbox ({@code ck_outbox_estado} de V5). */
+/** Estado de un registro del Outbox ({@code ck_outbox_status} de V5). */
 public enum EstadoNotificacion {
 
     /** Todavía no se envía; el proceso programado lo intentará. */

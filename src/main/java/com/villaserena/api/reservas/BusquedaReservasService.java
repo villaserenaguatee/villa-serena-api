@@ -44,10 +44,10 @@ public class BusquedaReservasService {
 
     /** Saldo = cargos VIGENTE − pagos APROBADO de la cuenta (igual que CuentaService). */
     private static final String SALDO = """
-            COALESCE((SELECT sum(cg.total) FROM cargos cg JOIN cuentas c ON c.id = cg.cuenta_id
-                      WHERE c.reserva_id = r.id AND cg.estado = 'VIGENTE'), 0)
-            - COALESCE((SELECT sum(p.monto) FROM pagos p JOIN cuentas c ON c.id = p.cuenta_id
-                        WHERE c.reserva_id = r.id AND p.estado = 'APROBADO'), 0)""";
+            COALESCE((SELECT sum(cg.total) FROM charges cg JOIN accounts c ON c.id = cg.account_id
+                      WHERE c.reservation_id = r.id AND cg.status = 'VIGENTE'), 0)
+            - COALESCE((SELECT sum(p.amount) FROM payments p JOIN accounts c ON c.id = p.account_id
+                        WHERE c.reservation_id = r.id AND p.status = 'APROBADO'), 0)""";
 
     private final JdbcTemplate jdbc;
     private final Clock reloj;
@@ -73,53 +73,53 @@ public class BusquedaReservasService {
         List<Object> parametros = new ArrayList<>();
         if (f.texto() != null && !f.texto().isBlank()) {
             String patron = "%" + HuespedService.escaparLike(f.texto().trim()) + "%";
-            where.append(" AND (h.nombre_completo ILIKE ? OR h.numero_documento ILIKE ?)");
+            where.append(" AND (h.full_name ILIKE ? OR h.document_number ILIKE ?)");
             parametros.add(patron);
             parametros.add(patron);
         }
         if (f.codigo() != null && !f.codigo().isBlank()) {
-            where.append(" AND r.codigo = ?");
+            where.append(" AND r.code = ?");
             parametros.add(f.codigo().trim().toUpperCase());
         }
         if (f.desde() != null) {
-            where.append(" AND r.fecha_salida > ?");
+            where.append(" AND r.checkout_date > ?");
             parametros.add(f.desde());
         }
         if (f.hasta() != null) {
-            where.append(" AND r.fecha_entrada <= ?");
+            where.append(" AND r.checkin_date <= ?");
             parametros.add(f.hasta());
         }
         if (f.estado() != null) {
-            where.append(" AND r.estado = ?");
+            where.append(" AND r.status = ?");
             parametros.add(f.estado().name());
         }
         if (f.canal() != null) {
-            where.append(" AND r.canal = ?");
+            where.append(" AND r.channel = ?");
             parametros.add(f.canal().name());
         }
         if (f.rapido() == FiltroRapido.LLEGAN_HOY) {
-            where.append(" AND r.estado = 'CONFIRMADA' AND r.fecha_entrada = ?");
+            where.append(" AND r.status = 'CONFIRMADA' AND r.checkin_date = ?");
             parametros.add(LocalDate.now(reloj));
         } else if (f.rapido() == FiltroRapido.SALEN_HOY) {
-            where.append(" AND r.estado = 'EN_ESTADIA' AND r.fecha_salida = ?");
+            where.append(" AND r.status = 'EN_ESTADIA' AND r.checkout_date = ?");
             parametros.add(LocalDate.now(reloj));
         }
 
         String desde = """
-                FROM reservas r
-                JOIN huespedes h ON h.id = r.huesped_id
-                JOIN tipos_habitacion t ON t.id = r.tipo_habitacion_id
-                LEFT JOIN habitaciones hab ON hab.id = r.habitacion_id""" + where;
+                FROM reservations r
+                JOIN guests h ON h.id = r.guest_id
+                JOIN room_types t ON t.id = r.room_type_id
+                LEFT JOIN rooms hab ON hab.id = r.room_id""" + where;
         long total = jdbc.queryForObject("SELECT count(*) " + desde, Long.class, parametros.toArray());
 
         List<Object> conPagina = new ArrayList<>(parametros);
         conPagina.add(size);
         conPagina.add((long) page * size);
         List<ReservaResumen> contenido = jdbc.query("""
-                SELECT r.codigo, h.id, h.nombre_completo, r.fecha_entrada, r.fecha_salida, r.numero_huespedes,
-                       t.id, t.nombre, hab.id, hab.numero, hab.piso, r.estado, r.canal, r.identificador_externo,
+                SELECT r.code, h.id, h.full_name, r.checkin_date, r.checkout_date, r.guest_count,
+                       t.id, t.name, hab.id, hab.number, hab.floor, r.status, r.channel, r.external_identifier,
                        r.total, (%s) AS saldo
-                """.formatted(SALDO) + desde + " ORDER BY r.fecha_entrada, r.codigo LIMIT ? OFFSET ?",
+                """.formatted(SALDO) + desde + " ORDER BY r.checkin_date, r.code LIMIT ? OFFSET ?",
                 (rs, i) -> {
                     LocalDate entrada = rs.getObject(4, LocalDate.class);
                     LocalDate salida = rs.getObject(5, LocalDate.class);
@@ -145,20 +145,18 @@ public class BusquedaReservasService {
         validarRango(desde, hasta);
         Map<Long, CalendarioReservas.Grupo> grupos = new LinkedHashMap<>();
         jdbc.query("""
-                SELECT t.id, t.nombre, h.id, h.numero, h.piso
-                FROM habitaciones h JOIN tipos_habitacion t ON t.id = h.tipo_habitacion_id
-                WHERE h.estado = 'ACTIVO'
-                ORDER BY t.id, h.piso, h.numero""", rs -> {
+                SELECT t.id, t.name AS "nombre", h.id, h.number AS "numero", h.floor AS "piso" FROM rooms h JOIN room_types t ON t.id = h.room_type_id
+                WHERE h.status = 'ACTIVO'
+                ORDER BY t.id, h.floor, h.number""", rs -> {
             TipoHabitacionReferencia tipo = new TipoHabitacionReferencia(rs.getLong(1), rs.getString(2));
             grupos.computeIfAbsent(tipo.id(), id -> new CalendarioReservas.Grupo(tipo, new ArrayList<>()))
                     .habitaciones().add(new HabitacionReferencia(rs.getLong(3), rs.getString(4), rs.getInt(5)));
         });
         List<ReservaCalendario> reservas = jdbc.query("""
-                SELECT r.codigo, h.nombre_completo, r.fecha_entrada, r.fecha_salida, r.estado, r.canal,
-                       r.tipo_habitacion_id, r.habitacion_id
-                FROM reservas r JOIN huespedes h ON h.id = r.huesped_id
-                WHERE r.estado <> 'CANCELADA' AND r.fecha_salida > ? AND r.fecha_entrada <= ?
-                ORDER BY r.fecha_entrada, r.codigo""",
+                SELECT r.code AS "codigo", h.full_name AS "nombre_completo", r.checkin_date AS "fecha_entrada", r.checkout_date AS "fecha_salida", r.status AS "estado", r.channel AS "canal",
+                       r.room_type_id AS "tipo_habitacion_id", r.room_id AS "habitacion_id" FROM reservations r JOIN guests h ON h.id = r.guest_id
+                WHERE r.status <> 'CANCELADA' AND r.checkout_date > ? AND r.checkin_date <= ?
+                ORDER BY r.checkin_date, r.code""",
                 (rs, i) -> new ReservaCalendario(rs.getString(1), rs.getString(2),
                         rs.getObject(3, LocalDate.class), rs.getObject(4, LocalDate.class),
                         EstadoReserva.valueOf(rs.getString(5)), CanalReserva.valueOf(rs.getString(6)),

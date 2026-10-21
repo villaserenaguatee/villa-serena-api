@@ -115,6 +115,7 @@ public class ReservaService {
         reserva.setTipoHabitacionId(tipo.id());
         reserva.setFechaEntrada(solicitud.entrada());
         reserva.setFechaSalida(solicitud.salida());
+        reserva.setHoraEstimadaLlegada(solicitud.horaEstimadaLlegada());
         reserva.setNumeroHuespedes(solicitud.numeroHuespedes());
         reserva.setCanal(solicitud.canal());
         reserva.setIdentificadorExterno(externo ? solicitud.identificadorExterno() : null);
@@ -204,7 +205,7 @@ public class ReservaService {
                     "Solo se asigna habitación antes del check-in, con la reserva pendiente de pago o confirmada.");
         }
         HabitacionDatos habitacion = jdbc.query(
-                "SELECT numero, tipo_habitacion_id, estado, condicion FROM habitaciones WHERE id = ? FOR UPDATE",
+                "SELECT number AS \"numero\", room_type_id AS \"tipo_habitacion_id\", status AS \"estado\", condition AS \"condicion\" FROM rooms WHERE id = ? FOR UPDATE",
                 (rs, i) -> new HabitacionDatos(rs.getString(1), rs.getLong(2), rs.getString(3), rs.getString(4)),
                 habitacionId).stream().findFirst()
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "NO_ENCONTRADO",
@@ -219,10 +220,10 @@ public class ReservaService {
                     "La habitación " + habitacion.numero() + " no está disponible (inactiva o fuera de servicio).");
         }
         Integer traslapes = jdbc.queryForObject("""
-                SELECT count(*) FROM reservas
-                WHERE habitacion_id = ? AND id <> ?
-                  AND estado IN ('PENDIENTE_PAGO', 'CONFIRMADA', 'EN_ESTADIA')
-                  AND daterange(fecha_entrada, fecha_salida, '[)') && daterange(?, ?, '[)')""",
+                SELECT count(*)  FROM reservations
+                WHERE room_id = ? AND id <> ?
+                  AND status IN ('PENDIENTE_PAGO', 'CONFIRMADA', 'EN_ESTADIA')
+                  AND daterange(checkin_date, checkout_date, '[)') && daterange(?, ?, '[)')""",
                 Integer.class, habitacionId, reserva.getId(), reserva.getFechaEntrada(), reserva.getFechaSalida());
         if (traslapes != null && traslapes > 0) {
             throw ApiException.conflicto("HABITACION_OCUPADA",

@@ -44,7 +44,7 @@ formato único `{codigo, mensaje, detalles}` en español.
 ## Una diferencia con el prompt, a propósito
 
 El prompt de OBJ-0B pide la zona horaria de Jackson en UTC. No se aplicó: el
-contrato (`openapi.yaml`, verificado en #12) muestra las fechas con el
+contrato de aquella revisión (verificado en #12; canónico actual en docs, ver [CONTRATO_API.md](CONTRATO_API.md)) muestra las fechas con el
 desplazamiento local, por ejemplo `2026-10-02T14:30:00-06:00` en
 `HistorialOperacion`. Poner Jackson en UTC reescribiría esas respuestas a `Z` y
 dejaría de cumplirse el contrato, que es la superficie que consumen la web y la
