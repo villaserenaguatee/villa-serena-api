@@ -97,7 +97,77 @@ public class TiposHabitacionAdminService {
         }
     }
 
+    @Transactional
+    public TipoHabitacionAdmin crear(com.villaserena.api.catalogo.dto.CrearTipoHabitacionPeticion peticion) {
+        Long id = jdbc.queryForObject("""
+                INSERT INTO room_types(name, description, capacity, base_price, weekend_adjustment_pct, status)
+                VALUES(?, ?, ?, ?, 0.00, 'ACTIVO')
+                RETURNING id""", Long.class,
+                peticion.nombre().trim(),
+                peticion.descripcion().trim(),
+                peticion.capacidad(),
+                peticion.precioBase());
+        return obtener(id);
+    }
+
+    @Transactional
+    public TipoHabitacionAdmin actualizar(long id, com.villaserena.api.catalogo.dto.EditarTipoHabitacionPeticion peticion) {
+        var actual = obtener(id);
+        int nuevaCapacidad = peticion.capacidad() != null ? peticion.capacidad() : actual.capacidad();
+        if (peticion.capacidad() != null && peticion.capacidad() < actual.capacidad()) {
+            Integer activas = jdbc.queryForObject("""
+                    SELECT count(*) FROM reservations
+                    WHERE room_type_id = ? AND status IN ('CONFIRMADA', 'EN_ESTADIA', 'PENDIENTE_PAGO')
+                      AND guest_count > ?""", Integer.class, id, nuevaCapacidad);
+            if (activas != null && activas > 0) {
+                throw ApiException.conflicto("RESERVAS_ACTIVAS", "El cambio de capacidad afecta reservas activas.");
+            }
+        }
+        String nombre = peticion.nombre() != null && !peticion.nombre().isBlank() ? peticion.nombre().trim() : actual.nombre();
+        String descripcion = peticion.descripcion() != null && !peticion.descripcion().isBlank() ? peticion.descripcion().trim() : actual.descripcion();
+        BigDecimal precio = peticion.precioBase() != null ? peticion.precioBase() : actual.precioBase();
+
+        jdbc.update("""
+                UPDATE room_types
+                SET name = ?, description = ?, capacity = ?, base_price = ?, version = version + 1
+                WHERE id = ?""", nombre, descripcion, nuevaCapacidad, precio, id);
+        return obtener(id);
+    }
+
+    @Transactional
+    public TipoHabitacionAdmin cambiarEstado(long id, com.villaserena.api.catalogo.dto.EstadoCatalogoPeticion peticion) {
+        var actual = obtener(id);
+        if ("INACTIVO".equalsIgnoreCase(peticion.estado())) {
+            Integer activas = jdbc.queryForObject("""
+                    SELECT count(*) FROM reservations
+                    WHERE room_type_id = ? AND status IN ('CONFIRMADA', 'EN_ESTADIA', 'PENDIENTE_PAGO')""",
+                    Integer.class, id);
+            if (activas != null && activas > 0) {
+                throw ApiException.conflicto("RESERVAS_ACTIVAS", "El tipo de habitación tiene reservas activas.");
+            }
+        }
+        jdbc.update("UPDATE room_types SET status = ?, version = version + 1 WHERE id = ?",
+                peticion.estado().toUpperCase(java.util.Locale.ROOT), id);
+        return obtener(id);
+    }
+
+    @Transactional
+    public TipoHabitacionAdmin ajustarFinSemana(long id, com.villaserena.api.catalogo.dto.AjusteFinSemanaPeticion peticion) {
+        obtener(id);
+        if (peticion.ajusteFinSemanaPct().compareTo(new BigDecimal("-100")) <= 0) {
+            throw ApiException.datosInvalidos("El ajuste de fin de semana debe ser mayor a -100%.",
+                    List.of(new DetalleError("ajusteFinSemanaPct", "El ajuste debe ser mayor a -100%.")));
+        }
+        jdbc.update("UPDATE room_types SET weekend_adjustment_pct = ?, version = version + 1 WHERE id = ?",
+                peticion.ajusteFinSemanaPct(), id);
+        return obtener(id);
+    }
+
     public List<TipoHabitacionAdmin> listar() {
+        return listar(null);
+    }
+
+    public List<TipoHabitacionAdmin> listar(String estado) {
         Map<Long, List<FotoCatalogo>> todasLasFotos = jdbc.query("""
                 SELECT room_type_id, object_key, is_primary, sort_order
                 FROM room_type_photos
@@ -111,11 +181,15 @@ public class TiposHabitacionAdminService {
                 .collect(Collectors.groupingBy(Map.Entry::getKey,
                         Collectors.mapping(Map.Entry::getValue, Collectors.toList())));
 
-        return jdbc.query("""
+        String sql = """
                 SELECT id, name AS "nombre", description AS "descripcion", capacity AS "capacidad",
                        base_price AS "precioBase", weekend_adjustment_pct AS "ajusteFinSemanaPct",
                        status AS "estado"
-                FROM room_types ORDER BY id""",
+                FROM room_types""" + (estado != null && !estado.isBlank() ? " WHERE status = ?" : "") + " ORDER BY id";
+
+        Object[] params = estado != null && !estado.isBlank() ? new Object[]{estado.toUpperCase(java.util.Locale.ROOT)} : new Object[]{};
+
+        return jdbc.query(sql,
                 (rs, i) -> new TipoHabitacionAdmin(
                         rs.getLong("id"),
                         rs.getString("nombre"),
@@ -124,7 +198,8 @@ public class TiposHabitacionAdminService {
                         rs.getBigDecimal("precioBase"),
                         rs.getBigDecimal("ajusteFinSemanaPct"),
                         rs.getString("estado"),
-                        todasLasFotos.getOrDefault(rs.getLong("id"), List.of())));
+                        todasLasFotos.getOrDefault(rs.getLong("id"), List.of())),
+                params);
     }
 
     private List<FotoCatalogo> fotosDeTipo(long tipoId) {
