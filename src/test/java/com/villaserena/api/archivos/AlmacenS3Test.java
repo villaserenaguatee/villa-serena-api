@@ -60,7 +60,7 @@ class AlmacenS3Test {
 
     private AlmacenS3 crear(String url, String region, String usuario, String secreto, boolean ruta, String bucket) {
         return new AlmacenS3(new PropiedadesVillaSerena(null, null, null, null, null, null, null, null,
-                new PropiedadesVillaSerena.Archivos(null, url, region, usuario, secreto, bucket, 10, ruta), null));
+                new PropiedadesVillaSerena.Archivos(null, url, region, usuario, secreto, bucket, bucket.isEmpty() ? "" : bucket + "-publico", 10, ruta), null));
     }
 
     @AfterEach
@@ -134,8 +134,21 @@ class AlmacenS3Test {
         try {
             assertThatThrownBy(() -> sinBucket.existePrivado("foto.jpg"))
                     .isInstanceOf(IllegalStateException.class).hasMessageContaining("STORAGE_BUCKET_PRIVATE");
+            assertThatThrownBy(() -> sinBucket.existePublico("tipos/foto.jpg"))
+                    .isInstanceOf(IllegalStateException.class).hasMessageContaining("STORAGE_BUCKET_PUBLIC");
         } finally {
             sinBucket.cerrar();
         }
+    }
+
+    @Test
+    void publicoPermiteGuardarYVerificarExistenciaConTratamiento403() {
+        byte[] foto = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
+        almacen.guardarPublico("tipos/suite.jpg", foto, "image/jpeg");
+        assertThat(objetos.get("/privado-publico/tipos/suite.jpg")).isEqualTo(foto);
+        assertThat(almacen.existePublico("tipos/suite.jpg")).isTrue();
+        assertThat(almacen.existePublico("tipos/ausente.jpg")).isFalse();
+        // Sin s3:ListBucket, 403 en HeadObject indica archivo ausente bajo la política de tipos/*
+        assertThat(almacen.existePublico("tipos/denegado")).isFalse();
     }
 }

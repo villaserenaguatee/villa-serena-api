@@ -45,7 +45,7 @@ class AlmacenS3RemoteTest {
         assertThat(usuario.isBlank()).as("Configura ambas credenciales o usa el rol/perfil AWS").isEqualTo(secreto.isBlank());
         if (!endpoint.isBlank()) assertThat(URI.create(endpoint).getScheme()).isEqualTo("https");
         var props = new PropiedadesVillaSerena(null, null, null, null, null, null, null, null,
-                new PropiedadesVillaSerena.Archivos(null, endpoint, region, usuario, secreto, bucket, 10, estiloRuta), null);
+                new PropiedadesVillaSerena.Archivos(null, endpoint, region, usuario, secreto, bucket, bucket + "-public", 10, estiloRuta), null);
         var almacen = new AlmacenS3(props);
         AwsCredentialsProvider credenciales = usuario.isBlank() ? DefaultCredentialsProvider.builder().build()
                 : StaticCredentialsProvider.create(AwsBasicCredentials.create(usuario, secreto));

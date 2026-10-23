@@ -92,6 +92,7 @@ villaserena:
     contrasena: ${STORAGE_SECRET_ACCESS_KEY:}
     estilo-ruta: ${STORAGE_PATH_STYLE:false}
     bucket-privado: ${STORAGE_BUCKET_PRIVATE:}
+    bucket-publico: ${STORAGE_BUCKET_PUBLIC:}
     # Vigencia de la URL firmada de las fotos privadas (incidencias).
     minutos-url-firmada: 10
   notificaciones:

@@ -10,6 +10,12 @@ public interface AlmacenArchivos {
 
     boolean existePrivado(String clave);
 
+    /** Almacenamiento en bucket público para fotos de catálogos servidas por CDN. */
+    void guardarPublico(String clave, byte[] contenido, String tipoContenido);
+
+    /** Comprueba si el objeto público existe. */
+    boolean existePublico(String clave);
+
     /** Lectura interna del mismo archivo privado para adjuntos; nunca expone una URL pública. */
     byte[] leerPrivado(String clave);
 
