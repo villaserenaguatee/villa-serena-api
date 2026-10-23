@@ -54,6 +54,28 @@ public class AlmacenS3 implements AlmacenArchivos {
     }
 
     @Override
+    public void guardarPublico(String clave, byte[] contenido, String tipoContenido) {
+        validarBucketPublico();
+        cliente().putObject(b -> b.bucket(config.bucketPublico()).key(clave).contentType(tipoContenido),
+                RequestBody.fromBytes(contenido));
+    }
+
+    @Override
+    public boolean existePublico(String clave) {
+        validarBucketPublico();
+        try {
+            cliente().headObject(b -> b.bucket(config.bucketPublico()).key(clave));
+            return true;
+        } catch (S3Exception e) {
+            // Sin ListBucket, un objeto inexistente puede responder 403 (Forbidden) o 404 (Not Found)
+            if (e.statusCode() == 404 || e.statusCode() == 403) {
+                return false;
+            }
+            throw e;
+        }
+    }
+
+    @Override
     public String urlFirmada(String clave) {
         return firmador().presignGetObject(b -> b
                 .signatureDuration(Duration.ofMinutes(config.minutosUrlFirmada()))
@@ -114,6 +136,12 @@ public class AlmacenS3 implements AlmacenArchivos {
     private void validarBucket() {
         if (vacio(config.bucketPrivado())) {
             throw new IllegalStateException("Falta STORAGE_BUCKET_PRIVATE para usar archivos remotos.");
+        }
+    }
+
+    private void validarBucketPublico() {
+        if (vacio(config.bucketPublico())) {
+            throw new IllegalStateException("Falta STORAGE_BUCKET_PUBLIC para usar archivos públicos.");
         }
     }
 
