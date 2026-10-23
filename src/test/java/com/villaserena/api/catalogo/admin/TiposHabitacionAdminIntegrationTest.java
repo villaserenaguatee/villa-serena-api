@@ -7,6 +7,8 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -279,6 +281,72 @@ class TiposHabitacionAdminIntegrationTest {
         mvc.perform(get("/api/v1/admin/tipos-habitacion/" + tipoId)
                         .header("Authorization", tokenRecepcion))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminPuedeCrearActualizarYCambiarEstadoDeTipoHabitacion() throws Exception {
+        String jsonCreacion = """
+                {
+                  "nombre": "Tipo Nuevo Test",
+                  "descripcion": "Descripción del nuevo tipo",
+                  "capacidad": 3,
+                  "precioBase": 750.00
+                }
+                """;
+
+        String creadoStr = mvc.perform(post("/api/v1/admin/tipos-habitacion")
+                        .header("Authorization", tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonCreacion))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.nombre", is("Tipo Nuevo Test")))
+                .andExpect(jsonPath("$.capacidad", is(3)))
+                .andExpect(jsonPath("$.precioBase", is(750.00)))
+                .andExpect(jsonPath("$.estado", is("ACTIVO")))
+                .andReturn().getResponse().getContentAsString();
+
+        int nuevoId = JsonPath.read(creadoStr, "$.id");
+
+        String jsonEdicion = """
+                {
+                  "nombre": "Tipo Editado",
+                  "precioBase": 800.00
+                }
+                """;
+
+        mvc.perform(patch("/api/v1/admin/tipos-habitacion/" + nuevoId)
+                        .header("Authorization", tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonEdicion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nombre", is("Tipo Editado")))
+                .andExpect(jsonPath("$.precioBase", is(800.00)));
+
+        String jsonAjuste = """
+                {
+                  "ajusteFinSemanaPct": 15.5
+                }
+                """;
+
+        mvc.perform(patch("/api/v1/admin/tipos-habitacion/" + nuevoId + "/ajuste-fin-semana")
+                        .header("Authorization", tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonAjuste))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ajusteFinSemanaPct", is(15.5)));
+
+        String jsonEstado = """
+                {
+                  "estado": "INACTIVO"
+                }
+                """;
+
+        mvc.perform(patch("/api/v1/admin/tipos-habitacion/" + nuevoId + "/estado")
+                        .header("Authorization", tokenAdmin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonEstado))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado", is("INACTIVO")));
     }
 
     private String subirFoto(String nombre, byte[] contenido) throws Exception {
