@@ -38,6 +38,7 @@ class ExportacionOpenApiTest {
         assertThat(schema.path("openapi").asText()).startsWith("3.");
         assertThat(schema.path("paths").has("/api/v1/reservas")).isTrue();
         assertThat(schema.path("paths").has("/api/v1/publico/reservas")).isTrue();
+        assertThat(schema.path("paths").has("/api/v1/admin/hotel")).isTrue();
         Path output = Path.of("target", "openapi-spring.json");
         Files.createDirectories(output.getParent());
         Files.writeString(output, json.writerWithDefaultPrettyPrinter().writeValueAsString(schema));
