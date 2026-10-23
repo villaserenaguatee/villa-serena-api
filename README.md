@@ -103,3 +103,9 @@ El API consume la revisión de docs fijada en `api-contract.json` (adopción #58
 La administración de ofertas, vínculos físicos y características amplía el CRUD
 básico de tipos/habitaciones y reutiliza fotos de #82. Véanse
 [operaciones, fuente de precio, cantidades y verificación](docs/OFERTAS_ADMIN.md).
+
+## Solicitudes del huésped (#22)
+
+Las rutas oficiales de consulta, limpieza, artículos y cancelación pendiente
+comparten las reglas persistidas con los consumidores anteriores. Véanse
+[compatibilidad, permisos y verificación](docs/SOLICITUDES_HUESPED.md).
