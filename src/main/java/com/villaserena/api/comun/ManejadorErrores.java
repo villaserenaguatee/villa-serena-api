@@ -89,8 +89,8 @@ public class ManejadorErrores {
                     .body(ErrorRespuesta.de("HABITACION_EXISTENTE", "Ese número de habitación ya existe."));
         }
         log.error("Violación de integridad no controlada", e);
-        return ResponseEntity.status(HttpStatus.CONFLICT)
-                .body(ErrorRespuesta.de("CONFLICTO_DATOS", "No se pudo completar la operación debido a un conflicto con los datos existentes."));
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorRespuesta.de("ERROR_INTERNO", "Ocurrió un error inesperado. Intenta de nuevo."));
     }
 
     private String extraerRestriccion(org.springframework.dao.DataIntegrityViolationException e) {
