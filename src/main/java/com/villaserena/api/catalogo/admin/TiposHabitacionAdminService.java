@@ -99,6 +99,12 @@ public class TiposHabitacionAdminService {
 
     @Transactional
     public TipoHabitacionAdmin crear(com.villaserena.api.catalogo.dto.CrearTipoHabitacionPeticion peticion) {
+        Integer existe = jdbc.queryForObject(
+                "SELECT count(*) FROM room_types WHERE lower(name) = lower(?)",
+                Integer.class, peticion.nombre().trim());
+        if (existe != null && existe > 0) {
+            throw ApiException.conflicto("CATEGORIA_EXISTENTE", "Ya existe una categoría de habitación con ese nombre.");
+        }
         Long id = jdbc.queryForObject("""
                 INSERT INTO room_types(name, description, capacity, base_price, weekend_adjustment_pct, status)
                 VALUES(?, ?, ?, ?, 0.00, 'ACTIVO')
@@ -113,6 +119,14 @@ public class TiposHabitacionAdminService {
     @Transactional
     public TipoHabitacionAdmin actualizar(long id, com.villaserena.api.catalogo.dto.EditarTipoHabitacionPeticion peticion) {
         var actual = obtener(id);
+        if (peticion.nombre() != null && !peticion.nombre().isBlank() && !peticion.nombre().trim().equalsIgnoreCase(actual.nombre())) {
+            Integer existe = jdbc.queryForObject(
+                    "SELECT count(*) FROM room_types WHERE lower(name) = lower(?) AND id <> ?",
+                    Integer.class, peticion.nombre().trim(), id);
+            if (existe != null && existe > 0) {
+                throw ApiException.conflicto("CATEGORIA_EXISTENTE", "Ya existe una categoría de habitación con ese nombre.");
+            }
+        }
         int nuevaCapacidad = peticion.capacidad() != null ? peticion.capacidad() : actual.capacidad();
         if (peticion.capacidad() != null && peticion.capacidad() < actual.capacidad()) {
             Integer activas = jdbc.queryForObject("""

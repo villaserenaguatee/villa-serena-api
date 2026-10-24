@@ -77,6 +77,35 @@ public class ManejadorErrores {
                 .body(ErrorRespuesta.de("NO_ENCONTRADO", "No se encontró el recurso solicitado."));
     }
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    ResponseEntity<ErrorRespuesta> violacionIntegridad(org.springframework.dao.DataIntegrityViolationException e) {
+        String restriccion = extraerRestriccion(e);
+        if ("uq_room_types_name".equalsIgnoreCase(restriccion)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ErrorRespuesta.de("CATEGORIA_EXISTENTE", "Ya existe una categoría de habitación con ese nombre."));
+        }
+        if ("uq_rooms_number".equalsIgnoreCase(restriccion)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ErrorRespuesta.de("HABITACION_EXISTENTE", "Ese número de habitación ya existe."));
+        }
+        log.error("Violación de integridad no controlada", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorRespuesta.de("ERROR_INTERNO", "Ocurrió un error inesperado. Intenta de nuevo."));
+    }
+
+    private String extraerRestriccion(org.springframework.dao.DataIntegrityViolationException e) {
+        Throwable cause = e.getMostSpecificCause();
+        String msg = (e.getMessage() != null ? e.getMessage() : "") + " "
+                + (cause != null && cause.getMessage() != null ? cause.getMessage() : "");
+        if (msg.contains("uq_room_types_name")) {
+            return "uq_room_types_name";
+        }
+        if (msg.contains("uq_rooms_number")) {
+            return "uq_rooms_number";
+        }
+        return null;
+    }
+
     @ExceptionHandler(Exception.class)
     ResponseEntity<ErrorRespuesta> inesperado(Exception e) {
         log.error("Error no controlado", e);
