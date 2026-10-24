@@ -103,6 +103,10 @@ public class HotelService {
                 peticion.razonSocial().trim(),
                 Nit.normalizar(nit),
                 peticion.direccionFiscal().trim());
+        jdbc.update("""
+                INSERT INTO invoice_series (series, initial_number, last_number)
+                SELECT 'VS-A', 1, 0
+                WHERE NOT EXISTS (SELECT 1 FROM invoice_series)""");
         jdbc.update("DELETE FROM hotel_photos");
         for (FotoHotelPeticion foto : peticion.fotos()) {
             jdbc.update("INSERT INTO hotel_photos (object_key, sort_order) VALUES (?, ?)",
