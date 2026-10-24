@@ -40,6 +40,8 @@ class MigracionesSinDemoTests {
     com.villaserena.api.auth.EmpleadoRepository empleados;
     @Autowired
     org.springframework.security.crypto.password.PasswordEncoder encoder;
+    @Autowired
+    com.villaserena.api.hotel.HotelService hotelService;
 
     @Test
     @org.springframework.transaction.annotation.Transactional
@@ -93,5 +95,25 @@ class MigracionesSinDemoTests {
 		assertThat(entorno.getProperty("spring.flyway.locations")).isEqualTo("classpath:db/migration");
 		assertThat(entorno.containsProperty("spring.flyway.placeholders.demo_password_hash")).isFalse();
 	}
+
+    @Test
+    @org.springframework.transaction.annotation.Transactional
+    void configuracionHotelAprovisionaSerieSinDemo() {
+        var peticion = new com.villaserena.api.hotel.HotelAdminPeticion(
+                "Hotel Villa Serena", "Hotel en Antigua", "5a Avenida Norte 12",
+                "+502 7832 0000", "hotel@villaserena.test", "Villa Serena",
+                "Villa Serena S.A.", "4817205-7", "5a Avenida Norte 12",
+                java.util.List.of());
+        hotelService.actualizar(peticion);
+
+        Integer series = jdbc.queryForObject("SELECT count(*) FROM invoice_series", Integer.class);
+        assertThat(series).isEqualTo(1);
+        String nombreSerie = jdbc.queryForObject("SELECT series FROM invoice_series LIMIT 1", String.class);
+        assertThat(nombreSerie).isEqualTo("VS-A");
+
+        // Al actualizar de nuevo, no duplica
+        hotelService.actualizar(peticion);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM invoice_series", Integer.class)).isEqualTo(1);
+    }
 
 }
