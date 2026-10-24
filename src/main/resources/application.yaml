@@ -64,7 +64,7 @@ villaserena:
     origenes: ${CORS_ORIGENES:http://localhost:3000}
   jwt:
     # Clave HMAC en Base64 (al menos 32 bytes). Solo en el .env.
-    secreto: ${JWT_SECRET}
+    secreto: ${JWT_SECRET:}
     acceso-minutos: 15
     refresh-dias: 7
   login:

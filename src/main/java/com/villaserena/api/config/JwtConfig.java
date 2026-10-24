@@ -40,10 +40,15 @@ public class JwtConfig {
     @Bean
     SecretKey claveJwt(PropiedadesVillaSerena propiedades) {
         String secreto = propiedades.jwt().secreto();
-        if (secreto == null || secreto.isBlank()) {
+        if (secreto == null || secreto.isBlank() || secreto.startsWith("${")) {
             throw new IllegalStateException("Falta JWT_SECRET (ver docs/ENTORNOS.md).");
         }
-        byte[] bytes = Base64.getDecoder().decode(secreto);
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(secreto);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("JWT_SECRET debe ser una cadena Base64 válida (ver docs/ENTORNOS.md).", e);
+        }
         if (bytes.length < 32) {
             throw new IllegalStateException("JWT_SECRET debe tener al menos 32 bytes en Base64.");
         }
