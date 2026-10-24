@@ -17,18 +17,25 @@ public class CatalogoOfertas {
     private final ObjectMapper json;
     private final DisponibilidadService disponibilidad;
     private final ReservaService reservas;
-    public CatalogoOfertas(JdbcTemplate jdbc,ObjectMapper json,DisponibilidadService disponibilidad,ReservaService reservas) {
-        this.jdbc=jdbc;this.json=json;this.disponibilidad=disponibilidad;this.reservas=reservas;
+    private final com.villaserena.api.catalogo.admin.TiposHabitacionAdminService tipos;
+    public CatalogoOfertas(JdbcTemplate jdbc,ObjectMapper json,DisponibilidadService disponibilidad,ReservaService reservas,com.villaserena.api.catalogo.admin.TiposHabitacionAdminService tipos) {
+        this.jdbc=jdbc;this.json=json;this.disponibilidad=disponibilidad;this.reservas=reservas;this.tipos=tipos;
     }
     @SuppressWarnings("unchecked")
     public List<Map<String,Object>> catalogo() {
-        return jdbc.query("SELECT o.slug,o.room_type_id AS \"tipo_habitacion_id\",o.base_price AS \"precio_base\",o.content AS \"contenido\",o.sort_order AS \"orden\",o.requirements AS \"requisitos\",t.status AS \"estado\" FROM catalog_offers o JOIN room_types t ON t.id=o.room_type_id ORDER BY o.sort_order",(r,i)->{
+        var fotosPorTipo=tipos.listar().stream().collect(java.util.stream.Collectors.toMap(t->t.id(),t->t.fotos()));
+        return jdbc.query("SELECT o.slug,o.room_type_id AS \"tipo_habitacion_id\",o.base_price AS \"precio_base\",o.content AS \"contenido\",o.sort_order AS \"orden\",o.requirements AS \"requisitos\",t.status AS \"estado\",t.capacity AS \"capacidad_tipo\" FROM catalog_offers o JOIN room_types t ON t.id=o.room_type_id WHERE coalesce((o.content->>'published')::boolean,true) ORDER BY o.sort_order,o.slug",(r,i)->{
             Map<String,Object> data=new LinkedHashMap<>(json.readValue(r.getString("contenido"),Map.class));
             // Editorial review notes are internal, never amenities promised to a guest.
-            data.remove("pendingFeatures");
+            data.remove("pendingFeatures");data.remove("published");data.remove("bedCounts");
+            var fotos=fotosPorTipo.getOrDefault(r.getLong("tipo_habitacion_id"),List.of());
+            if(!fotos.isEmpty()) {
+                data.put("image",fotos.stream().filter(f->f.principal()).findFirst().orElse(fotos.getFirst()).url());
+                data.put("gallery",fotos.stream().map(f->f.url()).toList());
+            } else { data.putIfAbsent("image", ""); data.putIfAbsent("gallery", List.of()); }
             data.put("apiTypeId",r.getLong("tipo_habitacion_id"));data.put("price",r.getBigDecimal("precio_base"));
-            boolean enabled="ACTIVO".equals(r.getString("estado"));
-            data.put("bookable",enabled && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM catalog_offer_rooms e JOIN rooms h ON h.id=e.room_id JOIN room_features c ON c.room_id=h.id JOIN catalog_offers f ON f.slug=e.slug WHERE e.slug=? AND h.room_type_id=? AND h.status='ACTIVO' AND h.condition<>'FUERA_DE_SERVICIO' AND c.content @> f.requirements)",Boolean.class,r.getString("slug"),r.getLong("tipo_habitacion_id"))));
+            boolean enabled="ACTIVO".equals(r.getString("estado")) && r.getInt("capacidad_tipo")>=((Number)data.get("capacity")).intValue();
+            data.put("bookable",enabled && Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM catalog_offer_rooms e JOIN rooms h ON h.id=e.room_id JOIN room_features c ON c.room_id=h.id JOIN catalog_offers f ON f.slug=e.slug WHERE e.slug=? AND h.room_type_id=? AND h.status='ACTIVO' AND h.condition<>'FUERA_DE_SERVICIO' AND c.content @> f.requirements AND (NOT (jsonb_exists(f.content,'published')) OR (h.floor=(f.content->>'floor')::integer AND coalesce((c.content->>'capacidad')::integer,0)>=(f.content->>'capacity')::integer)))",Boolean.class,r.getString("slug"),r.getLong("tipo_habitacion_id"))));
             return data;
         });
     }
@@ -41,6 +48,7 @@ public class CatalogoOfertas {
             JOIN room_features c ON c.room_id=h.id JOIN catalog_offers f ON f.slug=e.slug
             WHERE e.slug=? AND h.room_type_id=? AND h.status='ACTIVO' AND h.condition<>'FUERA_DE_SERVICIO'
             AND c.content @> f.requirements
+            AND (NOT (jsonb_exists(f.content,'published')) OR (h.floor=(f.content->>'floor')::integer AND coalesce((c.content->>'capacidad')::integer,0)>=(f.content->>'capacity')::integer))
             AND NOT EXISTS(SELECT 1 FROM reservations r WHERE r.room_id=h.id
               AND r.status IN ('PENDIENTE_PAGO','CONFIRMADA','EN_ESTADIA') AND r.checkin_date<? AND r.checkout_date>?)
             ORDER BY h.id
@@ -69,6 +77,8 @@ public class CatalogoOfertas {
         disponibilidad.validarEstadia(p.entrada(),p.salida(),p.numeroHuespedes());
         if(p.tipoHabitacionId()!=id || ((Number)o.get("capacity")).intValue()<p.numeroHuespedes())throw ApiException.conflicto("OFERTA_INCOMPATIBLE","La oferta y el tipo o capacidad no coinciden.");
         disponibilidad.bloquearTipo(id);
+        o=oferta(slug);
+        if(((Number)o.get("apiTypeId")).longValue()!=id || ((Number)o.get("capacity")).intValue()<p.numeroHuespedes())throw ApiException.conflicto("OFERTA_CAMBIADA","La oferta cambió. Consulta nuevamente.");
         List<Long> elegibles=libres(o,p.entrada(),p.salida(),true);
         if(!Boolean.TRUE.equals(o.get("bookable")) || elegibles.isEmpty() || disponibilidad.cupo(id,p.entrada(),p.salida())<=0)throw ApiException.conflicto("SIN_DISPONIBILIDAD","No hay una habitación acreditada disponible para esta oferta.");
         SolicitudReserva sol=new SolicitudReserva(id,p.entrada(),p.salida(),p.numeroHuespedes(),null,p.huesped(),elegibles.getFirst(),CanalReserva.DIRECTO_WEB,null,null,com.villaserena.api.comun.Responsable.CLIENTE,p.horaEstimadaLlegadaLocal());

@@ -149,17 +149,23 @@ class EmpleadosAdminIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.estado").value("INACTIVO"));
         login(RECEPCION, "Demo1234", 401);
         renovar(refresh).andExpect(status().isUnauthorized());
-        mvc.perform(get("/api/v1/auth/yo").header("Authorization", "Bearer " + acceso)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/auth/yo").header("Authorization", "Bearer " + acceso))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("SESION_ACTUALIZAR"));
         enviar(patch(RUTA + "/" + id(RECEPCION) + "/estado"), "{\"estado\":\"ACTIVO\"}").andExpect(status().isOk());
         login(RECEPCION, "Demo1234", 200);
         renovar(refresh).andExpect(status().isUnauthorized());
     }
 
     @Test
-    void cambiarPermisosRevocaRefreshPrevios() throws Exception {
+    void cambiarPermisosRevocaRefreshPreviosYRechazaJwtAnterior() throws Exception {
         String sesion = login(RECEPCION, "Demo1234", 200);
+        String acceso = JsonPath.read(sesion, "$.accessToken");
         enviar(patch(RUTA + "/" + id(RECEPCION)), "{\"rol\":\"ROOM_SERVICE\"}").andExpect(status().isOk());
         renovar(JsonPath.read(sesion, "$.refreshToken")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/v1/auth/yo").header("Authorization", "Bearer " + acceso))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("SESION_ACTUALIZAR"));
     }
 
     @Test

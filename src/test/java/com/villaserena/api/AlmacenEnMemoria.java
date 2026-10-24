@@ -31,7 +31,17 @@ public class AlmacenEnMemoria {
         }
 
         @Override
+        public void guardarPublico(String clave, byte[] contenido, String tipoContenido) {
+            objetos.put(clave, contenido);
+        }
+
+        @Override
         public boolean existePrivado(String clave) {
+            return objetos.containsKey(clave);
+        }
+
+        @Override
+        public boolean existePublico(String clave) {
             return objetos.containsKey(clave);
         }
 

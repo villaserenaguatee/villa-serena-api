@@ -44,7 +44,7 @@ public record PropiedadesVillaSerena(
      * entregan con una URL firmada de {@code minutosUrlFirmada}.
      */
     public record Archivos(String urlPublica, String endpoint, String region, String usuario, String contrasena,
-            String bucketPrivado, int minutosUrlFirmada, boolean estiloRuta) {
+            String bucketPrivado, String bucketPublico, int minutosUrlFirmada, boolean estiloRuta) {
     }
 
     /**

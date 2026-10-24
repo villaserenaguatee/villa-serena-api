@@ -46,6 +46,10 @@ VALUES
      'Hotel Villa Serena', 'Villa Serena Hotelera, S.A.', '4817205-7',
      '5a Avenida Norte 12, Antigua Guatemala, Sacatepéquez');
 
+INSERT INTO hotel_wifi (id, network_name, password)
+VALUES (1, 'VillaSerena-Huespedes', 'EjemploWifi2026')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO invoice_series (series, initial_number, last_number)
 VALUES ('VS-A', 1, 0);
 

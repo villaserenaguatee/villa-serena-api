@@ -19,7 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @RestController
 @RequestMapping("/api/v1/archivos")
-@PreAuthorize("hasAnyRole('RECEPCION', 'MANTENIMIENTO_LIMPIEZA')")
+@PreAuthorize("hasAnyRole('ADMIN', 'RECEPCION', 'MANTENIMIENTO_LIMPIEZA')")
 public class ArchivosController {
 
     private final ImagenesService imagenes;
