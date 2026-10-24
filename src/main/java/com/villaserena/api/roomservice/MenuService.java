@@ -32,20 +32,33 @@ public class MenuService {
     private final ItemMenuRepository items;
     private final Clock reloj;
     private final String urlPublica;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
 
-    public MenuService(ItemMenuRepository items, Clock reloj, PropiedadesVillaSerena propiedades) {
+    public MenuService(ItemMenuRepository items, Clock reloj, PropiedadesVillaSerena propiedades,
+            org.springframework.jdbc.core.JdbcTemplate jdbc) {
         this.items = items;
         this.reloj = reloj;
         this.urlPublica = propiedades.archivos().urlPublica();
+        this.jdbc = jdbc;
     }
 
     /** El menú activo, agrupado por categoría. Es el mismo para la app y para Room Service. */
     @Transactional(readOnly = true)
     public MenuApp menu() {
         Map<String, Long> idsCategoria = new LinkedHashMap<>();
+        try {
+            jdbc.query("SELECT id, name FROM menu_categories ORDER BY id", (rs, i) -> {
+                idsCategoria.put(rs.getString("name"), rs.getLong("id"));
+                return null;
+            });
+        } catch (Exception ignored) {
+            // fallback defensivo
+        }
         List<ItemMenuApp> vista = new ArrayList<>();
         for (ItemMenu item : items.activos()) {
-            long categoriaId = idsCategoria.computeIfAbsent(item.getCategoria(), c -> idsCategoria.size() + 1L);
+            long categoriaId = item.getCategoriaId() != null
+                    ? item.getCategoriaId()
+                    : idsCategoria.computeIfAbsent(item.getCategoria(), c -> idsCategoria.size() + 1L);
             vista.add(new ItemMenuApp(item.getId(), categoriaId, item.getNombre(), item.getDescripcion(),
                     item.getPrecio(), fotoUrl(item), item.getDisponibilidad()));
         }

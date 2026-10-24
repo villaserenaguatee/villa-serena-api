@@ -32,6 +32,9 @@ public class ItemMenu {
     @Column(name = "category", nullable = false)
     private String categoria;
 
+    @Column(name = "category_id")
+    private Long categoriaId;
+
     @Column(name = "name", nullable = false)
     private String nombre;
 
