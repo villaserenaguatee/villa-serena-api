@@ -122,6 +122,31 @@ class IncidenciasIntegrationTest {
     }
 
     @Test
+    void catalogoHabitacionesOperativasParaReportarIncidencias() throws Exception {
+        mvc.perform(get("/api/v1/incidencias/habitaciones").header("Authorization", luis))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].id").isNumber())
+                .andExpect(jsonPath("$[0].numero").isString())
+                .andExpect(jsonPath("$[0].piso").isNumber());
+
+        mvc.perform(get("/api/v1/incidencias/habitaciones").header("Authorization", marta))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mvc.perform(get("/api/v1/incidencias/habitaciones").header("Authorization", pedro))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mvc.perform(get("/api/v1/incidencias/habitaciones").header("Authorization", recepcion))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+
+        mvc.perform(get("/api/v1/incidencias/habitaciones"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void soloRecepcionYMylSubenFotosDeIncidencias() throws Exception {
         subir(admin, "dano.jpg", JPG).andExpect(status().isForbidden());
         subir(token("rodrigo.aju@villaserena.test"), "dano.jpg", JPG).andExpect(status().isForbidden());
