@@ -97,3 +97,9 @@ reserva; cambiar la hora con la misma `Idempotency-Key` responde 409
 El contrato canónico se mantiene en el repositorio de docs; su actualización y la
 conexión del campo en la web se coordinan en [docs #22](https://github.com/villaserenaguatee/villa-serena-docs/issues/22).
 El API consume la revisión de docs fijada en `api-contract.json` (adopción #58).
+
+## Gestión comercial del catálogo (#83)
+
+La administración de ofertas, vínculos físicos y características amplía el CRUD
+básico de tipos/habitaciones y reutiliza fotos de #82. Véanse
+[operaciones, fuente de precio, cantidades y verificación](docs/OFERTAS_ADMIN.md).
