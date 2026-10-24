@@ -84,6 +84,10 @@ public class ManejadorErrores {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ErrorRespuesta.de("CATEGORIA_EXISTENTE", "Ya existe una categoría de habitación con ese nombre."));
         }
+        if ("uq_menu_categories_name".equalsIgnoreCase(restriccion)) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ErrorRespuesta.de("CATEGORIA_EXISTENTE", "Ya existe una categoría de menú con ese nombre."));
+        }
         if ("uq_rooms_number".equalsIgnoreCase(restriccion)) {
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(ErrorRespuesta.de("HABITACION_EXISTENTE", "Ese número de habitación ya existe."));
@@ -99,6 +103,9 @@ public class ManejadorErrores {
                 + (cause != null && cause.getMessage() != null ? cause.getMessage() : "");
         if (msg.contains("uq_room_types_name")) {
             return "uq_room_types_name";
+        }
+        if (msg.contains("uq_menu_categories_name")) {
+            return "uq_menu_categories_name";
         }
         if (msg.contains("uq_rooms_number")) {
             return "uq_rooms_number";
