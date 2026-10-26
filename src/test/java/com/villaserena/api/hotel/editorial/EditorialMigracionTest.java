@@ -34,8 +34,11 @@ class EditorialMigracionTest {
             assertThat(anteriores.get("hotel_configuration")).isNotEmpty();
             var flyway = Flyway.configure().dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
                     .locations("classpath:db/migration").load();
-            assertThat(flyway.migrate().migrationsExecuted).isEqualTo(1);
+            var migracion = flyway.migrate();
+            assertThat(migracion.migrationsExecuted).isEqualTo(2);
+            assertThat(migracion.migrations).extracting(resultado -> resultado.version).containsExactly("33", "34");
             assertThat(flyway.migrate().migrationsExecuted).isZero();
+            assertThat(jdbc.queryForObject("SELECT count(*) FROM employees WHERE personal_email IS NOT NULL", Long.class)).isZero();
             for (String tabla : tablas) assertThat(filas(jdbc,tabla)).as("Datos anteriores de %s",tabla).isEqualTo(anteriores.get(tabla));
             assertThat(filas(jdbc,"hotel_editorial_drafts")).isEmpty();
             assertThat(filas(jdbc,"hotel_editorial_publications")).isEmpty();
@@ -43,6 +46,8 @@ class EditorialMigracionTest {
     }
 
     private List<String> filas(JdbcTemplate jdbc,String tabla) {
-        return jdbc.queryForList("SELECT to_jsonb(t)::text FROM \"" + tabla.replace("\"","\"\"") + "\" t ORDER BY to_jsonb(t)::text",String.class);
+        // V33 adds a nullable contact field; compare every pre-existing column unchanged.
+        String fila = "employees".equals(tabla) ? "(to_jsonb(t) - 'personal_email')" : "to_jsonb(t)";
+        return jdbc.queryForList("SELECT " + fila + "::text FROM \"" + tabla.replace("\"","\"\"") + "\" t ORDER BY " + fila + "::text",String.class);
     }
 }
