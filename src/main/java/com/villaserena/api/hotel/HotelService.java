@@ -28,10 +28,12 @@ public class HotelService {
 
     private final JdbcTemplate jdbc;
     private final String urlPublica;
+    private final GaleriaHotel galeria;
 
-    public HotelService(JdbcTemplate jdbc, PropiedadesVillaSerena propiedades) {
+    public HotelService(JdbcTemplate jdbc, PropiedadesVillaSerena propiedades, GaleriaHotel galeria) {
         this.jdbc = jdbc;
         this.urlPublica = propiedades.archivos().urlPublica();
+        this.galeria = galeria;
     }
 
     /** 404 si el hotel todavía no está configurado (sin datos de demostración ni registro de Administración). */
@@ -68,18 +70,19 @@ public class HotelService {
 
     @Transactional
     public HotelAdmin actualizar(HotelAdminPeticion peticion) {
+        return actualizar(peticion, null);
+    }
+
+    @Transactional
+    public HotelAdmin actualizar(HotelAdminPeticion peticion, String revisionGaleria) {
         String nit = peticion.nit().trim();
         if ("CF".equalsIgnoreCase(nit) || !Nit.esValido(nit)) {
             throw ApiException.datosInvalidos("El NIT del hotel no es válido.",
                     List.of(new DetalleError("nit", "El NIT del hotel no es válido.")));
         }
-        for (FotoHotelPeticion foto : peticion.fotos()) {
-            String clave = foto.clave().trim();
-            if (clave.startsWith("incidencias/") || clave.startsWith("/") || clave.contains("..")) {
-                throw ApiException.datosInvalidos("La clave de la foto no es válida.",
-                        List.of(new DetalleError("fotos", "La clave de la foto no es válida.")));
-            }
-        }
+        if (jdbc.queryForList("SELECT id FROM hotel_configuration WHERE id=1 FOR UPDATE", Long.class).isEmpty())
+            throw noConfigurado();
+        galeria.actualizar(peticion.fotos(), revisionGaleria);
         int actualizadas = jdbc.update("""
                 UPDATE hotel_configuration SET name=?, description=?, address=?, phone=?, email=?,
                     trade_name=?, legal_name=?, tax_id=?, tax_address=? WHERE id=1""",
@@ -87,11 +90,6 @@ public class HotelService {
                 peticion.telefono().trim(), peticion.correo().trim(), peticion.nombreComercial().trim(),
                 peticion.razonSocial().trim(), Nit.normalizar(nit), peticion.direccionFiscal().trim());
         if (actualizadas == 0) throw noConfigurado();
-        jdbc.update("DELETE FROM hotel_photos");
-        for (FotoHotelPeticion foto : peticion.fotos()) {
-            jdbc.update("INSERT INTO hotel_photos (object_key, sort_order) VALUES (?, ?)",
-                    foto.clave().trim(), foto.orden());
-        }
         return admin();
     }
 

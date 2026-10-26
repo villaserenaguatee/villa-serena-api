@@ -78,6 +78,8 @@ class HotelAdminIntegrationTest {
     @MockitoBean
     PasarelaPagos pasarela;
 
+    @Autowired AlmacenEnMemoria.Almacen almacen;
+
     String admin;
     String recepcion;
     long recepcionistaId;
@@ -124,6 +126,10 @@ class HotelAdminIntegrationTest {
                 "nombreComercial", "razonSocial", "nit", "direccionFiscal",
                 "fotos", "horaCheckIn", "horaCheckOut", "politicaCancelacion");
 
+        String revision = mvc.perform(get(RUTA).header("Authorization", admin)).andReturn().getResponse().getHeader("ETag");
+        almacen.guardarPublico("hotel/00000000-0000-0000-0000-000000000001.jpg", new byte[]{1}, "image/jpeg");
+        almacen.guardarPublico("hotel/00000000-0000-0000-0000-000000000002.jpg", new byte[]{1}, "image/jpeg");
+
         String actualizacion = """
                 {
                   "nombre": "  Villa Serena Boutique  ",
@@ -136,15 +142,15 @@ class HotelAdminIntegrationTest {
                   "nit": " 1234567-9 ",
                   "direccionFiscal": "  4a Calle Oriente 15, Zona 1, Antigua Guatemala  ",
                   "fotos": [
-                    { "clave": "hotel/terraza.jpg", "orden": 1 },
-                    { "clave": "hotel/portada.jpg", "orden": 0 }
+                    { "clave": "hotel/00000000-0000-0000-0000-000000000002.jpg", "orden": 1 },
+                    { "clave": "hotel/00000000-0000-0000-0000-000000000001.jpg", "orden": 0 }
                   ]
                 }
                 """;
 
         mvc.perform(put(RUTA).header("Authorization", admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(actualizacion))
+                        .header("If-Match", revision).content(actualizacion))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre").value("Villa Serena Boutique"))
                 .andExpect(jsonPath("$.descripcion").value("Hotel colonial renovado en Antigua Guatemala."))
@@ -156,9 +162,9 @@ class HotelAdminIntegrationTest {
                 .andExpect(jsonPath("$.nit").value("1234567-9"))
                 .andExpect(jsonPath("$.direccionFiscal").value("4a Calle Oriente 15, Zona 1, Antigua Guatemala"))
                 .andExpect(jsonPath("$.fotos", hasSize(2)))
-                .andExpect(jsonPath("$.fotos[0].clave").value("hotel/portada.jpg"))
+                .andExpect(jsonPath("$.fotos[0].clave").value("hotel/00000000-0000-0000-0000-000000000001.jpg"))
                 .andExpect(jsonPath("$.fotos[0].orden").value(0))
-                .andExpect(jsonPath("$.fotos[1].clave").value("hotel/terraza.jpg"))
+                .andExpect(jsonPath("$.fotos[1].clave").value("hotel/00000000-0000-0000-0000-000000000002.jpg"))
                 .andExpect(jsonPath("$.fotos[1].orden").value(1))
                 .andExpect(jsonPath("$.horaCheckIn").value("15:00"))
                 .andExpect(jsonPath("$.horaCheckOut").value("12:00"))
@@ -172,7 +178,7 @@ class HotelAdminIntegrationTest {
                 .andExpect(jsonPath("$.ubicacion.direccion").value("4a Calle Oriente 15, Antigua Guatemala"))
                 .andExpect(jsonPath("$.contacto.telefono").value("+502 7832 9999"))
                 .andExpect(jsonPath("$.contacto.correo").value("contacto@villaserena.gt"))
-                .andExpect(jsonPath("$.fotos", contains(base + "/hotel/portada.jpg", base + "/hotel/terraza.jpg")))
+                .andExpect(jsonPath("$.fotos", contains(base + "/hotel/00000000-0000-0000-0000-000000000001.jpg", base + "/hotel/00000000-0000-0000-0000-000000000002.jpg")))
                 .andExpect(jsonPath("$.horaCheckIn").value("15:00"))
                 .andExpect(jsonPath("$.horaCheckOut").value("12:00"));
     }

@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -38,8 +39,9 @@ public class HotelAdminController {
 
     @GetMapping
     @Operation(operationId = "consultarHotelAdmin", summary = "Consultar datos generales y fiscales")
-    public HotelAdmin consultar() {
-        return hotel.admin();
+    public ResponseEntity<HotelAdmin> consultar() {
+        HotelAdmin actual = hotel.admin();
+        return ResponseEntity.ok().eTag(GaleriaHotel.revision(actual.fotos())).body(actual);
     }
 
     @PostMapping("/inicializacion")
@@ -60,9 +62,10 @@ public class HotelAdminController {
 
     @PutMapping
     @Operation(operationId = "editarHotelAdmin", summary = "Actualizar datos del hotel")
-    public HotelAdmin actualizar(@Valid @RequestBody HotelAdminPeticion peticion) {
-        HotelAdmin actualizado = hotel.actualizar(peticion);
+    public ResponseEntity<HotelAdmin> actualizar(@Valid @RequestBody HotelAdminPeticion peticion,
+            @RequestHeader(value = "If-Match", required = false) String revisionGaleria) {
+        HotelAdmin actualizado = hotel.actualizar(peticion, revisionGaleria);
         log.info("Configuración del hotel actualizada: administradorId={}", UsuarioActual.id());
-        return actualizado;
+        return ResponseEntity.ok().eTag(GaleriaHotel.revision(actualizado.fotos())).body(actualizado);
     }
 }
