@@ -344,6 +344,30 @@ class HotelAdminIntegrationTest {
                 .andExpect(jsonPath("$.hotel.direccionFiscal").value("Nueva Dirección Fiscal 99"));
     }
 
+    @Test
+    void inicializacionConHistoriaNoModificaReservasPagosCuentasNiFacturas() throws Exception {
+        String codigo = enEstadia("101", "historia.inicializacion@correo.test");
+        mvc.perform(post("/api/v1/checkout/{c}", codigo).header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comprador\":{\"nit\":\"CF\",\"nombreComprador\":\"Cliente de prueba\"},\"pago\":{\"metodo\":\"EFECTIVO\"}}"))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM invoices", Integer.class)).isPositive();
+        var antes = new java.util.LinkedHashMap<String, List<Map<String, Object>>>();
+        for (String tabla : List.of("reservations", "payments", "accounts", "invoices", "invoice_series", "hotel_photos")) {
+            antes.put(tabla, jdbc.queryForList("SELECT * FROM " + tabla + " ORDER BY id"));
+        }
+        jdbc.update("DELETE FROM hotel_configuration");
+        String cuerpo = peticionValida("4817205-7", "[]").replaceAll(",\\s*\"fotos\"\\s*:\\s*\\[\\]", "");
+        mvc.perform(post(RUTA + "/inicializacion").header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(cuerpo)).andExpect(status().isCreated());
+        mvc.perform(get(RUTA).header("Authorization", admin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.nit").value("4817205-7"));
+        for (var tabla : antes.entrySet()) {
+            assertThat(jdbc.queryForList("SELECT * FROM " + tabla.getKey() + " ORDER BY id"))
+                    .as("Historia conservada en %s", tabla.getKey()).isEqualTo(tabla.getValue());
+        }
+    }
+
     private static String peticionValida(String nit, String fotosJson) {
         return """
                 {
