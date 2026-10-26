@@ -80,33 +80,13 @@ public class HotelService {
                         List.of(new DetalleError("fotos", "La clave de la foto no es válida.")));
             }
         }
-        jdbc.update("""
-                INSERT INTO hotel_configuration (id, name, description, address, phone, email,
-                                                 trade_name, legal_name, tax_id, tax_address)
-                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT (id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    description = EXCLUDED.description,
-                    address = EXCLUDED.address,
-                    phone = EXCLUDED.phone,
-                    email = EXCLUDED.email,
-                    trade_name = EXCLUDED.trade_name,
-                    legal_name = EXCLUDED.legal_name,
-                    tax_id = EXCLUDED.tax_id,
-                    tax_address = EXCLUDED.tax_address""",
-                peticion.nombre().trim(),
-                peticion.descripcion().trim(),
-                peticion.direccion().trim(),
-                peticion.telefono().trim(),
-                peticion.correo().trim(),
-                peticion.nombreComercial().trim(),
-                peticion.razonSocial().trim(),
-                Nit.normalizar(nit),
-                peticion.direccionFiscal().trim());
-        jdbc.update("""
-                INSERT INTO invoice_series (series, initial_number, last_number)
-                SELECT 'VS-A', 1, 0
-                WHERE NOT EXISTS (SELECT 1 FROM invoice_series)""");
+        int actualizadas = jdbc.update("""
+                UPDATE hotel_configuration SET name=?, description=?, address=?, phone=?, email=?,
+                    trade_name=?, legal_name=?, tax_id=?, tax_address=? WHERE id=1""",
+                peticion.nombre().trim(), peticion.descripcion().trim(), peticion.direccion().trim(),
+                peticion.telefono().trim(), peticion.correo().trim(), peticion.nombreComercial().trim(),
+                peticion.razonSocial().trim(), Nit.normalizar(nit), peticion.direccionFiscal().trim());
+        if (actualizadas == 0) throw noConfigurado();
         jdbc.update("DELETE FROM hotel_photos");
         for (FotoHotelPeticion foto : peticion.fotos()) {
             jdbc.update("INSERT INTO hotel_photos (object_key, sort_order) VALUES (?, ?)",
@@ -114,6 +94,35 @@ public class HotelService {
         }
         return admin();
     }
+
+    /** La clave única de PostgreSQL serializa creaciones concurrentes, incluso entre instancias. */
+    @Transactional
+    public Inicializacion inicializar(InicializarHotelPeticion p) {
+        if ("CF".equalsIgnoreCase(p.nit()) || !Nit.esValido(p.nit())) {
+            throw ApiException.datosInvalidos("El NIT del hotel no es válido.",
+                    List.of(new DetalleError("nit", "El NIT del hotel no es válido.")));
+        }
+        int creadas = jdbc.update("""
+                INSERT INTO hotel_configuration
+                    (id, name, description, address, phone, email, trade_name, legal_name, tax_id, tax_address)
+                VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING""",
+                p.nombre(), p.descripcion(), p.direccion(), p.telefono(), p.correo(),
+                p.nombreComercial(), p.razonSocial(), Nit.normalizar(p.nit()), p.direccionFiscal());
+        HotelAdmin actual = admin();
+        if (!List.of(p.nombre(), p.descripcion(), p.direccion(), p.telefono(), p.correo(),
+                p.nombreComercial(), p.razonSocial(), nitComparable(p.nit()), p.direccionFiscal())
+                .equals(List.of(actual.nombre().trim(), actual.descripcion().trim(), actual.direccion().trim(),
+                        actual.telefono().trim(), actual.correo().trim(), actual.nombreComercial().trim(),
+                        actual.razonSocial().trim(), nitComparable(actual.nit()), actual.direccionFiscal().trim()))) {
+            throw ApiException.conflicto("HOTEL_YA_CONFIGURADO",
+                    "El hotel ya tiene una configuración diferente. Consulta los datos actuales; no se sobrescribieron.");
+        }
+        return new Inicializacion(actual, creadas == 1);
+    }
+
+    private static String nitComparable(String nit) { return Nit.normalizar(nit).replace("-", ""); }
+
+    public record Inicializacion(HotelAdmin hotel, boolean creada) { }
 
     private static ApiException noConfigurado() {
         return new ApiException(HttpStatus.NOT_FOUND, "HOTEL_NO_CONFIGURADO",
