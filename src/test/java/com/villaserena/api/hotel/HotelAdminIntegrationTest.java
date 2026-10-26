@@ -190,10 +190,10 @@ class HotelAdminIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("HOTEL_NO_CONFIGURADO"));
 
-        mvc.perform(put(RUTA).header("Authorization", admin)
+        mvc.perform(post(RUTA + "/inicializacion").header("Authorization", admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(peticionValida("6-k", "[]")))
-                .andExpect(status().isOk())
+                        .content(peticionValida("6-k", "[]").replaceAll(",\\s*\"fotos\": \\[\\]", "")))
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nombre").value("Villa Serena"))
                 .andExpect(jsonPath("$.nit").value("6-K"))
                 .andExpect(jsonPath("$.fotos", hasSize(0)));
