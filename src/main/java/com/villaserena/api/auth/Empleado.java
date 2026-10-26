@@ -30,6 +30,9 @@ public class Empleado {
     @Column(name = "email", nullable = false)
     private String correo;
 
+    @Column(name = "personal_email", length = 150)
+    private String correoPersonal;
+
     @Column(name = "phone", nullable = false)
     private String telefono;
 

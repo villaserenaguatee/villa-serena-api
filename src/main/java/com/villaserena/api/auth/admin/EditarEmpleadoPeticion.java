@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.Nulls;
 import com.villaserena.api.auth.AreaMyl;
 import com.villaserena.api.auth.RolEmpleado;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 
@@ -15,6 +16,12 @@ public class EditarEmpleadoPeticion {
     private String nombreCompleto;
     @Size(min = 1, max = 30) @Pattern(regexp = "(?s).*\\S.*")
     private String telefono;
+    @Email @Size(min = 1, max = 150) @Pattern(regexp = "[^\\s@]+@[^\\s@]+\\.[^\\s@]+")
+    private String correoPersonal;
+    @Getter(lombok.AccessLevel.NONE)
+    private boolean correoPersonalInformado;
+    public boolean correoPersonalInformado() { return correoPersonalInformado; }
+    public void setCorreoPersonal(String valor) { correoPersonal = valor; correoPersonalInformado = true; }
     private RolEmpleado rol;
     private AreaMyl area;
     @Getter(lombok.AccessLevel.NONE)
