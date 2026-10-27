@@ -58,6 +58,11 @@ management:
       # correo no debe poner /actuator/health en DOWN.
       enabled: false
 
+# El buzón operativo no se deriva del correo público, From ni usuario SMTP.
+villa-serena:
+  contacto:
+    destinatario: ${CONTACTO_DESTINATARIO:}
+
 villaserena:
   zona-horaria: America/Guatemala
   cors:
