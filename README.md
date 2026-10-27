@@ -21,6 +21,9 @@ descargan ni generan el contrato.
 es diagnóstica hasta reconciliar las operaciones; las comprobaciones de revisión,
 herramientas, DTO y permisos sí son obligatorias en CI.
 
+La [guía de seguridad de CI/CD](docs/SEGURIDAD_CI.md) describe los gates de Trivy,
+SonarQube y cobertura JaCoCo, su configuración y las excepciones justificadas.
+
 ## Esquema y datos locales (#59)
 
 Flyway versiona **solo el esquema**, en `src/main/resources/db/migration`, con nombres y comentarios SQL en inglés. Todos los perfiles usan esa misma carpeta. Los valores de negocio (`CONFIRMADA`, `RECEPCION`, etc.) conservan su representación actual. JDBC y JPA mapean el esquema en inglés a los DTO y atributos Java existentes.
