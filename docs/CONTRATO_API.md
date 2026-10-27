@@ -9,9 +9,9 @@ contrato durante peticiones de negocio.
 ## Revisión adoptada
 
 `api-contract.json` fija el repositorio `villaserenaguatee/villa-serena-docs` y el
-commit completo `404b0596446513e5d3b5f859c1a874017a5bcb49`, preparado localmente en
-Docs #55 (pendiente de revisión y publicación). El SHA-256 de su YAML es
-`c13d33374ec7ee939d0cf3b332a977113ec9b9507348ad2c2f09c084ad8fba5f`.
+commit completo `b059137ec9ee15946176762c1c0e93756104239f`, integrado en
+`main` mediante el squash merge de Docs PR #60. La huella del YAML debe
+consultarse en el informe de verificación generado para esta revisión.
 Local y CI leen el mismo manifiesto; no usan `main` cambiante ni otra copia YAML.
 
 Para adoptar otra revisión, revisar primero su PR en docs, actualizar
