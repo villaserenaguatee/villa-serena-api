@@ -62,6 +62,35 @@ Un API saludable puede tener todas las tablas de negocio vacías: el hotel y sus
 
 Los archivos privados se guardan mediante el adaptador local en PostgreSQL; no se abre ninguna conexión a un bucket remoto. Las URLs de descarga apuntan a `API_PUBLIC_URL` (por defecto `http://localhost:8080`). El correo no está disponible en este modo: las operaciones que envíen correo necesitan un SMTP; el outbox reintenta los envíos fallidos. Tampoco se simulan pagos ni push externos.
 
+### Contacto público y destinatario SMTP (#115)
+
+El formulario requiere `CONTACTO_DESTINATARIO` explícito en cada entorno
+(`villa-serena.contacto.destinatario` conserva su nombre para configuración externa).
+Admite una única dirección válida, hasta 254 caracteres, sin nombre visible,
+listas, grupos ni CR/LF. No se verifica DNS ni entrega mediante esta validación.
+El valor no se toma del correo público del hotel, `MAIL_FROM` ni `MAIL_USER`.
+
+Ausente o inválido: el API arranca y registra un aviso sin imprimir valores, pero
+los intentos nuevos de contacto responden 503 `CONTACTO_NO_DISPONIBLE`, sin SMTP
+ni intento confirmado en base de datos. Un FALLIDO tampoco incrementa intentos
+hasta configurar el destino. Consultas y repeticiones de ENVIADO/ENVIANDO/INCIERTO
+siguen devolviendo el estado anterior. Tras configurar, reinicia el proceso.
+Se elimina el fallback fijo anterior: establecer explícitamente el buzón aprobado
+es una precondición de actualización para entornos que habiliten el formulario.
+
+`MAIL_FROM` identifica al remitente; `MAIL_HOST`, `MAIL_PORT`, `MAIL_AUTH`,
+`MAIL_STARTTLS`, `MAIL_USER` y `MAIL_PASSWORD` configuran el transporte. El correo
+del visitante solo se usa como Reply-To validado. ENVIADO significa aceptación
+SMTP, no entrega al buzón; INCIERTO exige consultar sin reenviar. Los contactos
+no usan los reintentos automáticos del Outbox.
+
+Para comprobarlo, usa Mailpit o el transporte mock de las pruebas con direcciones
+como `operacion@example.test`. Nunca pruebes automáticamente con SMTP productivo
+o buzones reales. El contacto mantiene POST/GET públicos con seguimiento mínimo
+`{id, estado}`; no expone destinatarios, remitente, mensajes ni credenciales.
+La guía canónica y el contrato se preparan en Docs #58 antes de adoptar su revisión
+en el manifiesto del API; su integración y revisión se verifican por separado.
+
 ### API con Maven, PostgreSQL en Docker
 
 Necesitas Java 21; Maven lo proporciona el wrapper.
