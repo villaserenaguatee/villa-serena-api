@@ -11,6 +11,8 @@ Trivy, con un aviso de que Sonar queda fuera de alcance. GitHub tiene `main` com
 predeterminada al configurar esta integración; `develop` sigue siendo la rama de
 integración del equipo. Por tanto, una PR de trabajo hacia `develop` no recibe
 análisis Sonar; la PR de entrega hacia `main` sí lo recibe.
+Para la issue #111 se autorizó excepcionalmente una PR directa hacia `main`,
+después de que `develop` se integrara y eliminara mediante la PR #110.
 
 Trivy analiza el POM, incluidas las dependencias transitivas; otro job construye
 el Dockerfile de producción y analiza sus paquetes de sistema y las librerías
