@@ -54,7 +54,7 @@ class EmpleadosAdminIntegrationTest {
         List<Map<String, Object>> lista = JsonPath.read(cuerpo, "$");
         assertThat(lista).isNotEmpty().allSatisfy(e -> {
             assertThat(e).containsEntry("rol", "ADMIN").containsEntry("estado", "ACTIVO");
-            assertThat(e.keySet()).containsExactlyInAnyOrder("id", "nombreCompleto", "correo", "telefono", "rol", "area", "estado");
+            assertThat(e.keySet()).containsExactlyInAnyOrder("id", "nombreCompleto", "correo", "telefono", "rol", "area", "estado", "correoPersonal");
         });
         assertThat(lista).anySatisfy(e -> assertThat(e).containsEntry("correo", ADMIN));
         enviar(get(RUTA).param("rol", "DESCONOCIDO"), null).andExpect(status().isBadRequest());
@@ -255,6 +255,40 @@ class EmpleadosAdminIntegrationTest {
         } finally {
             sistema.setLogLevel(logger, anterior);
         }
+    }
+
+    @Test
+    void contactoPersonalNoCambiaAccesoYSuOmitidoONullSonCompatibles() throws Exception {
+        Empleado anterior = empleados.findByCorreoIgnoreCase(RECEPCION).orElseThrow();
+        assertThat(anterior.getCorreoPersonal()).isNull();
+        String creado = crear("dos-correos@example.test", "RECEPCION", ",\"correoPersonal\":\"contacto@example.test\"");
+        long empleadoId = ((Number) JsonPath.read(creado, "$.empleado.id")).longValue();
+        String temporal = JsonPath.read(creado, "$.contrasenaTemporal");
+        assertThat((String) JsonPath.read(creado, "$.empleado.correoPersonal")).isEqualTo("contacto@example.test");
+        String sesion = login("dos-correos@example.test", temporal, 200);
+        String refresh = JsonPath.read(sesion, "$.refreshToken");
+        login("contacto@example.test", temporal, 401);
+        String hash = empleados.findById(empleadoId).orElseThrow().getContrasenaHash();
+        enviar(patch(RUTA + "/" + empleadoId), "{\"telefono\":\"55551234\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.correoPersonal").value("contacto@example.test"));
+        enviar(patch(RUTA + "/" + empleadoId), "{\"correoPersonal\":\"otro@example.test\"}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.correo").value("dos-correos@example.test"));
+        renovar(refresh).andExpect(status().isOk());
+        enviar(patch(RUTA + "/" + empleadoId), "{\"correoPersonal\":null}")
+                .andExpect(status().isOk());
+        assertThat(empleados.findById(empleadoId).orElseThrow().getCorreoPersonal()).isNull();
+        assertThat(empleados.findById(empleadoId).orElseThrow().getContrasenaHash()).isEqualTo(hash);
+        enviar(patch(RUTA + "/" + empleadoId), "{\"correo\":\"no-permitido@example.test\"}")
+                .andExpect(status().isBadRequest());
+        enviar(post(RUTA), alta("DOS-CORREOS@example.test", "RECEPCION", ""))
+                .andExpect(status().isConflict());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "no-es-correo", "espacio @example.test"})
+    void rechazaContactoPersonalInvalido(String valor) throws Exception {
+        enviar(post(RUTA), alta("contacto-invalido@example.test", "RECEPCION", ",\"correoPersonal\":\"" + valor + "\""))
+                .andExpect(status().isBadRequest());
     }
 
     private String crear(String correo, String rol, String extra) throws Exception {

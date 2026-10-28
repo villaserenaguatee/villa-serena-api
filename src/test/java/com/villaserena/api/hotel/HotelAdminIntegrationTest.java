@@ -78,6 +78,8 @@ class HotelAdminIntegrationTest {
     @MockitoBean
     PasarelaPagos pasarela;
 
+    @Autowired AlmacenEnMemoria.Almacen almacen;
+
     String admin;
     String recepcion;
     long recepcionistaId;
@@ -124,6 +126,10 @@ class HotelAdminIntegrationTest {
                 "nombreComercial", "razonSocial", "nit", "direccionFiscal",
                 "fotos", "horaCheckIn", "horaCheckOut", "politicaCancelacion");
 
+        String revision = mvc.perform(get(RUTA).header("Authorization", admin)).andReturn().getResponse().getHeader("ETag");
+        almacen.guardarPublico("hotel/00000000-0000-0000-0000-000000000001.jpg", new byte[]{1}, "image/jpeg");
+        almacen.guardarPublico("hotel/00000000-0000-0000-0000-000000000002.jpg", new byte[]{1}, "image/jpeg");
+
         String actualizacion = """
                 {
                   "nombre": "  Villa Serena Boutique  ",
@@ -136,15 +142,15 @@ class HotelAdminIntegrationTest {
                   "nit": " 1234567-9 ",
                   "direccionFiscal": "  4a Calle Oriente 15, Zona 1, Antigua Guatemala  ",
                   "fotos": [
-                    { "clave": "hotel/terraza.jpg", "orden": 1 },
-                    { "clave": "hotel/portada.jpg", "orden": 0 }
+                    { "clave": "hotel/00000000-0000-0000-0000-000000000002.jpg", "orden": 1 },
+                    { "clave": "hotel/00000000-0000-0000-0000-000000000001.jpg", "orden": 0 }
                   ]
                 }
                 """;
 
         mvc.perform(put(RUTA).header("Authorization", admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(actualizacion))
+                        .header("If-Match", revision).content(actualizacion))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.nombre").value("Villa Serena Boutique"))
                 .andExpect(jsonPath("$.descripcion").value("Hotel colonial renovado en Antigua Guatemala."))
@@ -156,9 +162,9 @@ class HotelAdminIntegrationTest {
                 .andExpect(jsonPath("$.nit").value("1234567-9"))
                 .andExpect(jsonPath("$.direccionFiscal").value("4a Calle Oriente 15, Zona 1, Antigua Guatemala"))
                 .andExpect(jsonPath("$.fotos", hasSize(2)))
-                .andExpect(jsonPath("$.fotos[0].clave").value("hotel/portada.jpg"))
+                .andExpect(jsonPath("$.fotos[0].clave").value("hotel/00000000-0000-0000-0000-000000000001.jpg"))
                 .andExpect(jsonPath("$.fotos[0].orden").value(0))
-                .andExpect(jsonPath("$.fotos[1].clave").value("hotel/terraza.jpg"))
+                .andExpect(jsonPath("$.fotos[1].clave").value("hotel/00000000-0000-0000-0000-000000000002.jpg"))
                 .andExpect(jsonPath("$.fotos[1].orden").value(1))
                 .andExpect(jsonPath("$.horaCheckIn").value("15:00"))
                 .andExpect(jsonPath("$.horaCheckOut").value("12:00"))
@@ -172,7 +178,7 @@ class HotelAdminIntegrationTest {
                 .andExpect(jsonPath("$.ubicacion.direccion").value("4a Calle Oriente 15, Antigua Guatemala"))
                 .andExpect(jsonPath("$.contacto.telefono").value("+502 7832 9999"))
                 .andExpect(jsonPath("$.contacto.correo").value("contacto@villaserena.gt"))
-                .andExpect(jsonPath("$.fotos", contains(base + "/hotel/portada.jpg", base + "/hotel/terraza.jpg")))
+                .andExpect(jsonPath("$.fotos", contains(base + "/hotel/00000000-0000-0000-0000-000000000001.jpg", base + "/hotel/00000000-0000-0000-0000-000000000002.jpg")))
                 .andExpect(jsonPath("$.horaCheckIn").value("15:00"))
                 .andExpect(jsonPath("$.horaCheckOut").value("12:00"));
     }
@@ -190,10 +196,10 @@ class HotelAdminIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.codigo").value("HOTEL_NO_CONFIGURADO"));
 
-        mvc.perform(put(RUTA).header("Authorization", admin)
+        mvc.perform(post(RUTA + "/inicializacion").header("Authorization", admin)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(peticionValida("6-k", "[]")))
-                .andExpect(status().isOk())
+                        .content(peticionValida("6-k", "[]").replaceAll(",\\s*\"fotos\": \\[\\]", "")))
+                .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.nombre").value("Villa Serena"))
                 .andExpect(jsonPath("$.nit").value("6-K"))
                 .andExpect(jsonPath("$.fotos", hasSize(0)));
@@ -342,6 +348,30 @@ class HotelAdminIntegrationTest {
                 .andExpect(jsonPath("$.hotel.razonSocial").value("Nueva Razón Social, S.A."))
                 .andExpect(jsonPath("$.hotel.nit").value("1234567-9"))
                 .andExpect(jsonPath("$.hotel.direccionFiscal").value("Nueva Dirección Fiscal 99"));
+    }
+
+    @Test
+    void inicializacionConHistoriaNoModificaReservasPagosCuentasNiFacturas() throws Exception {
+        String codigo = enEstadia("101", "historia.inicializacion@correo.test");
+        mvc.perform(post("/api/v1/checkout/{c}", codigo).header("Authorization", recepcion)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"comprador\":{\"nit\":\"CF\",\"nombreComprador\":\"Cliente de prueba\"},\"pago\":{\"metodo\":\"EFECTIVO\"}}"))
+                .andExpect(status().isOk());
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM invoices", Integer.class)).isPositive();
+        var antes = new java.util.LinkedHashMap<String, List<Map<String, Object>>>();
+        for (String tabla : List.of("reservations", "payments", "accounts", "invoices", "invoice_series", "hotel_photos")) {
+            antes.put(tabla, jdbc.queryForList("SELECT * FROM " + tabla + " ORDER BY id"));
+        }
+        jdbc.update("DELETE FROM hotel_configuration");
+        String cuerpo = peticionValida("4817205-7", "[]").replaceAll(",\\s*\"fotos\"\\s*:\\s*\\[\\]", "");
+        mvc.perform(post(RUTA + "/inicializacion").header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(cuerpo)).andExpect(status().isCreated());
+        mvc.perform(get(RUTA).header("Authorization", admin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.nit").value("4817205-7"));
+        for (var tabla : antes.entrySet()) {
+            assertThat(jdbc.queryForList("SELECT * FROM " + tabla.getKey() + " ORDER BY id"))
+                    .as("Historia conservada en %s", tabla.getKey()).isEqualTo(tabla.getValue());
+        }
     }
 
     private static String peticionValida(String nit, String fotosJson) {

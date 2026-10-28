@@ -45,6 +45,7 @@ public class AdministracionEmpleados {
         Empleado empleado = new Empleado();
         empleado.setNombreCompleto(peticion.nombreCompleto().trim());
         empleado.setCorreo(correo);
+        empleado.setCorreoPersonal(peticion.correoPersonal());
         empleado.setTelefono(peticion.telefono().trim());
         empleado.setRol(peticion.rol());
         empleado.setArea(peticion.area());
@@ -63,7 +64,7 @@ public class AdministracionEmpleados {
     @Transactional
     public EmpleadoAdmin editar(long id, long actorId, EditarEmpleadoPeticion peticion) {
         if (peticion.getNombreCompleto() == null && peticion.getTelefono() == null
-                && peticion.getRol() == null && !peticion.areaInformada()) {
+                && peticion.getRol() == null && !peticion.areaInformada() && !peticion.correoPersonalInformado()) {
             throw invalido("peticion", "Debes enviar al menos un campo editable.");
         }
         Empleado empleado = buscar(id);
@@ -76,6 +77,7 @@ public class AdministracionEmpleados {
         boolean permisosCambiados = rol != empleado.getRol() || area != empleado.getArea();
         if (peticion.getNombreCompleto() != null) empleado.setNombreCompleto(peticion.getNombreCompleto().trim());
         if (peticion.getTelefono() != null) empleado.setTelefono(peticion.getTelefono().trim());
+        if (peticion.correoPersonalInformado()) empleado.setCorreoPersonal(peticion.getCorreoPersonal());
         empleado.setRol(rol);
         empleado.setArea(area);
         if (permisosCambiados) tokens.revocarTodosDelEmpleado(id);

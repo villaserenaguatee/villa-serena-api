@@ -3,6 +3,9 @@ package com.villaserena.api.archivos;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import javax.imageio.ImageIO;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -12,8 +15,8 @@ import com.villaserena.api.comun.DetalleError;
 
 /**
  * Imágenes subidas por el personal: solo JPG o PNG de hasta 5 MB, validando el
- * contenido real (no la extensión ni el tipo que dice el navegador). Por ahora solo
- * el uso INCIDENCIA (bucket privado); los usos de Administración llegan con su módulo.
+ * firma del contenido, no la extensión ni el MIME del navegador. HOTEL también
+ * exige una imagen decodificable y limita sus dimensiones antes de almacenarla.
  */
 @Service
 public class ImagenesService {
@@ -29,6 +32,7 @@ public class ImagenesService {
 
     /** Prefijo de las fotos del menú en el bucket público (servidas por CDN). */
     public static final String PREFIJO_MENU = "menu/";
+    public static final String PREFIJO_HOTEL = "hotel/";
 
     private static final byte[] FIRMA_JPG = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF};
     private static final byte[] FIRMA_PNG = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
@@ -41,7 +45,7 @@ public class ImagenesService {
 
     public ImagenSubida subir(UsoImagen uso, byte[] contenido) {
         String rol = com.villaserena.api.auth.UsuarioActual.rol();
-        if (uso == UsoImagen.TIPO_HABITACION || uso == UsoImagen.MENU) {
+        if (uso == UsoImagen.TIPO_HABITACION || uso == UsoImagen.MENU || uso == UsoImagen.HOTEL) {
             if (!"ADMIN".equals(rol)) {
                 throw new ApiException(HttpStatus.FORBIDDEN, "ACCESO_DENEGADO",
                         "Solo el administrador puede subir fotos del catálogo.");
@@ -73,7 +77,16 @@ public class ImagenesService {
             throw invalido("TIPO_NO_PERMITIDO", "Solo se aceptan imágenes JPG o PNG.");
         }
         String clave;
-        if (uso == UsoImagen.TIPO_HABITACION) {
+        if (uso == UsoImagen.HOTEL) {
+            validarHotel(contenido);
+            clave = PREFIJO_HOTEL + UUID.randomUUID() + extension;
+            try {
+                almacen.guardarPublico(clave, contenido, tipo);
+            } catch (RuntimeException error) {
+                throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "ALMACEN_NO_DISPONIBLE",
+                        "No se pudo guardar la fotografía. La galería no cambió.");
+            }
+        } else if (uso == UsoImagen.TIPO_HABITACION) {
             clave = PREFIJO_TIPOS + UUID.randomUUID() + extension;
             almacen.guardarPublico(clave, contenido, tipo);
         } else if (uso == UsoImagen.MENU) {
@@ -84,6 +97,25 @@ public class ImagenesService {
             almacen.guardarPrivado(clave, contenido, tipo);
         }
         return new ImagenSubida(clave);
+    }
+
+    private static void validarHotel(byte[] contenido) {
+        try (var entrada = ImageIO.createImageInputStream(new ByteArrayInputStream(contenido))) {
+            var lectores = ImageIO.getImageReaders(entrada);
+            if (!lectores.hasNext()) throw invalido("TIPO_NO_PERMITIDO", "Selecciona una fotografía JPG o PNG válida.");
+            var lector = lectores.next();
+            try {
+                lector.setInput(entrada);
+                int ancho = lector.getWidth(0), alto = lector.getHeight(0);
+                if (ancho < 1 || alto < 1 || (long) ancho * alto > 16_000_000)
+                    throw invalido("DIMENSIONES_NO_PERMITIDAS", "La fotografía admite hasta 16 millones de píxeles.");
+                if (lector.read(0) == null) throw invalido("TIPO_NO_PERMITIDO", "Selecciona una fotografía válida.");
+            } finally {
+                lector.dispose();
+            }
+        } catch (IOException | IllegalArgumentException error) {
+            throw invalido("TIPO_NO_PERMITIDO", "Selecciona una fotografía JPG o PNG válida.");
+        }
     }
 
     private static boolean empiezaCon(byte[] contenido, byte[] firma) {

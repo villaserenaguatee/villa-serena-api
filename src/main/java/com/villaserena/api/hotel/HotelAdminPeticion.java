@@ -3,6 +3,7 @@ package com.villaserena.api.hotel;
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -21,7 +22,7 @@ public record HotelAdminPeticion(
         @NotBlank @Size(max = 150) String razonSocial,
         @NotBlank @Size(max = 20) String nit,
         @NotBlank @Size(max = 255) String direccionFiscal,
-        @NotNull List<@Valid @NotNull FotoHotelPeticion> fotos) {
+        @JsonDeserialize(using = FotosHotelDeserializer.class) List<@Valid @NotNull FotoHotelPeticion> fotos) {
 
     public HotelAdminPeticion {
         nombre = nombre == null ? null : nombre.trim();

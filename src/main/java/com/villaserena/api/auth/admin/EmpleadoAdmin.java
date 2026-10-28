@@ -6,10 +6,10 @@ import com.villaserena.api.auth.EstadoEmpleado;
 import com.villaserena.api.auth.RolEmpleado;
 
 public record EmpleadoAdmin(Long id, String nombreCompleto, String correo, String telefono,
-        RolEmpleado rol, AreaMyl area, EstadoEmpleado estado) {
+        RolEmpleado rol, AreaMyl area, EstadoEmpleado estado, String correoPersonal) {
 
     public static EmpleadoAdmin de(Empleado empleado) {
         return new EmpleadoAdmin(empleado.getId(), empleado.getNombreCompleto(), empleado.getCorreo(),
-                empleado.getTelefono(), empleado.getRol(), empleado.getArea(), empleado.getEstado());
+                empleado.getTelefono(), empleado.getRol(), empleado.getArea(), empleado.getEstado(), empleado.getCorreoPersonal());
     }
 }
