@@ -69,5 +69,19 @@ final class CatalogoEditorial {
         "contacto.subtitulo",
         "contacto.titulo",
         "ayuda.titulo",
-        "pie.descripcion");
+        "pie.descripcion",
+        "inicio.imagenes",
+        "galeria-hotel.imagenes",
+        "nosotros.imagen",
+        "servicios.spa.imagen",
+        "servicios.gimnasio.imagen",
+        "servicios.piscina.imagen",
+        "servicios.restaurante.imagen",
+        "estancias.romantica.imagen",
+        "estancias.descanso.imagen",
+        "estancias.familiar.imagen",
+        "estancias.negocios.imagen",
+        "estancias.bienestar.imagen",
+        "estancia-digital.imagen",
+        "identidad.logo.imagen");
 }

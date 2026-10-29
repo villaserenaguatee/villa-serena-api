@@ -122,6 +122,55 @@ class EditorialIntegrationTest {
     }
 
     @Test
+    void albumOrdenadoEnBorradorNoCambiaGaleriaNiCatalogoYPublicacionEsExplicita() throws Exception {
+        String a = "hotel/00000000-0000-0000-0000-000000000021.png";
+        String b = "hotel/00000000-0000-0000-0000-000000000022.png";
+        almacen.guardarPublico(a, new byte[]{1}, "image/png");
+        almacen.guardarPublico(b, new byte[]{2}, "image/png");
+        var galeria = jdbc.queryForList("SELECT * FROM hotel_photos ORDER BY id");
+        var tipos = jdbc.queryForList("SELECT * FROM room_type_photos ORDER BY id");
+        String contenido = "{\"revision\":0,\"elementos\":[{\"id\":\"inicio.imagenes\",\"fotoClaves\":[\"" + b + "\",\"" + a + "\"]}]}";
+        mvc.perform(put(ADMIN + "es").header("Authorization", recepcion).contentType(MediaType.APPLICATION_JSON).content(contenido))
+                .andExpect(status().isForbidden());
+        guardar("es", contenido, 200);
+        mvc.perform(get(PUBLICO + "es")).andExpect(status().isNotFound());
+        assertThat(jdbc.queryForList("SELECT * FROM hotel_photos ORDER BY id")).isEqualTo(galeria);
+        assertThat(jdbc.queryForList("SELECT * FROM room_type_photos ORDER BY id")).isEqualTo(tipos);
+        publicar("es", 1, 200);
+        mvc.perform(get(PUBLICO + "es")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.elementos[0].fotoClaves[0]").value(b));
+        guardar("es", "{\"revision\":1,\"elementos\":[{\"id\":\"inicio.imagenes\",\"fotoClaves\":[]}]}", 200);
+        mvc.perform(get(PUBLICO + "es")).andExpect(jsonPath("$.elementos[0].fotoClaves.length()").value(2));
+        publicar("es", 1, 409);
+        publicar("es", 2, 200);
+        mvc.perform(get(PUBLICO + "es")).andExpect(jsonPath("$.elementos[0].fotoClaves").isEmpty());
+        assertThat(almacen.existePublico(a)).isTrue();
+        assertThat(almacen.existePublico(b)).isTrue();
+    }
+
+    @Test
+    void rechazaAlbumDuplicadoPosicionIndividualMultipleYClaveAjena() throws Exception {
+        for (String elemento : List.of(
+                "{\"id\":\"inicio.imagenes\",\"fotoClaves\":[\"tipos/ajena.png\"]}",
+                "{\"id\":\"servicios.spa.imagen\",\"fotoClaves\":[\"a\",\"b\"]}",
+                "{\"id\":\"inicio.imagenes\",\"fotoClaves\":[\"a\",\"a\"]}",
+                "{\"id\":\"inicio.imagenes\",\"fotoClaves\":[],\"texto\":\"mezcla\"}"))
+            guardar("es", "{\"revision\":0,\"elementos\":[" + elemento + "]}", 400);
+    }
+
+    @Test
+    void conservaClavesAnterioresRegistradasSinRenombrarlasNiBorrarArchivos() throws Exception {
+        String anterior = "hotel/fachada-anterior.jpg";
+        jdbc.update("INSERT INTO hotel_photos(object_key,sort_order) VALUES (?,0)", anterior);
+        almacen.guardarPublico(anterior, new byte[]{1}, "image/jpeg");
+        guardar("es", "{\"revision\":0,\"elementos\":[{\"id\":\"galeria-hotel.imagenes\",\"fotoClaves\":[\"" + anterior + "\"]}]}", 200);
+        publicar("es", 1, 200);
+        mvc.perform(get(PUBLICO + "es")).andExpect(jsonPath("$.elementos[0].fotoClaves[0]").value(anterior));
+        assertThat(almacen.existePublico(anterior)).isTrue();
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM hotel_photos WHERE object_key=?", Integer.class, anterior)).isEqualTo(1);
+    }
+
+    @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     void persisteEntrePeticionesYSesionesSinSobrescrituraConcurrente() throws Exception {
         var antes = jdbc.queryForList("SELECT * FROM hotel_configuration");
