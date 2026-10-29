@@ -44,6 +44,15 @@ import com.villaserena.api.reservas.pagos.PasarelaPagos;
 @ActiveProfiles("test")
 @Transactional
 class HotelGaleriaIntegrationTest {
+    @Test
+    void revisionDelCuerpoCoincideConElEtagYDeclaraCapacidad() throws Exception {
+        String administrador = token("sofia.morales@villaserena.test");
+        var respuesta = mvc.perform(get("/api/v1/admin/hotel").header("Authorization", administrador))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.editorFotografico").value(true))
+                .andReturn().getResponse();
+        assertThat((String) JsonPath.read(respuesta.getContentAsString(), "$.revisionGaleria"))
+                .isEqualTo(respuesta.getHeader("ETag")).matches("\"[a-f0-9]{64}\"");
+    }
     static final String RUTA = "/api/v1/admin/hotel";
     @Autowired MockMvc mvc;
     @Autowired JdbcTemplate jdbc;

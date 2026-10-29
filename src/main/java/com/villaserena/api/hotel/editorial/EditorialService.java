@@ -105,7 +105,10 @@ public class EditorialService {
 
     private Map<String, String> imagenes(List<ElementoEditorial> elementos) {
         Map<String, String> urls = new LinkedHashMap<>();
-        for (var elemento : elementos) if (elemento.fotoClave() != null) urls.put(elemento.fotoClave(), urlPublica + "/" + elemento.fotoClave());
+        for (var elemento : elementos) {
+            if (elemento.fotoClave() != null) urls.put(elemento.fotoClave(), urlPublica + "/" + elemento.fotoClave());
+            if (elemento.fotoClaves() != null) for (String clave : elemento.fotoClaves()) urls.put(clave, urlPublica + "/" + clave);
+        }
         return urls;
     }
 
@@ -116,19 +119,28 @@ public class EditorialService {
         for (var elemento : elementos) {
             String id = elemento.id();
             if (!CatalogoEditorial.IDS.contains(id)) throw invalido("El elemento seleccionado no admite edición editorial.");
-            if (id.endsWith(".imagen")) {
-                String clave = elemento.fotoClave();
-                if (elemento.texto() != null || elemento.destino() != null || clave == null
-                        || !clave.matches("hotel/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png)")
-                        || jdbc.queryForObject("SELECT count(*) FROM hotel_photos WHERE object_key=?", Integer.class, clave) == 0)
-                    throw invalido("Selecciona una fotografía de la galería del hotel.");
-                boolean existe;
-                try { existe = almacen.existePublico(clave); }
-                catch (RuntimeException error) { throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "ALMACEN_NO_DISPONIBLE", "No se pudo comprobar la fotografía. Conservamos el contenido anterior."); }
-                if (!existe) throw invalido("La fotografía ya no está disponible.");
+            if (id.endsWith(".imagen") || id.endsWith(".imagenes")) {
+                var claves = elemento.fotoClaves() != null ? elemento.fotoClaves()
+                        : elemento.fotoClave() != null ? List.of(elemento.fotoClave()) : null;
+                int maximo = id.endsWith(".imagenes") ? 30 : 1;
+                if (elemento.texto() != null || elemento.destino() != null || claves == null
+                        || elemento.fotoClave() != null && elemento.fotoClaves() != null
+                        || claves.size() > maximo || claves.stream().distinct().count() != claves.size()
+                        || "identidad.logo.imagen".equals(id) && claves.isEmpty())
+                    throw invalido("Revisa las fotografías de la sección y su orden.");
+                for (String clave : claves) {
+                    boolean registrada = clave != null && clave.startsWith("hotel/")
+                            && jdbc.queryForObject("SELECT count(*) FROM hotel_photos WHERE object_key=?", Integer.class, clave) > 0;
+                    if (clave == null || !registrada && !clave.matches("hotel/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\.(jpg|png)"))
+                        throw invalido("Selecciona una fotografía cargada para el hotel.");
+                    boolean existe;
+                    try { existe = almacen.existePublico(clave); }
+                    catch (RuntimeException error) { throw new ApiException(HttpStatus.SERVICE_UNAVAILABLE, "ALMACEN_NO_DISPONIBLE", "No se pudo comprobar la fotografía. Conservamos el contenido anterior."); }
+                    if (!existe) throw invalido("La fotografía ya no está disponible.");
+                }
             } else {
                 String texto = elemento.texto();
-                if (elemento.fotoClave() != null || texto == null || texto.isBlank() || texto.length() > 4000
+                if (elemento.fotoClave() != null || elemento.fotoClaves() != null || texto == null || texto.isBlank() || texto.length() > 4000
                         || texto.indexOf('<') >= 0 || texto.indexOf('>') >= 0
                         || texto.codePoints().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t'))
                     throw invalido("Introduce texto sin etiquetas ni contenido ejecutable.");

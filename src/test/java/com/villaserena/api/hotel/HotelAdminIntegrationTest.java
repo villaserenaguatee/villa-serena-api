@@ -124,7 +124,7 @@ class HotelAdminIntegrationTest {
         assertThat(campos.keySet()).containsExactlyInAnyOrder(
                 "nombre", "descripcion", "direccion", "telefono", "correo",
                 "nombreComercial", "razonSocial", "nit", "direccionFiscal",
-                "fotos", "horaCheckIn", "horaCheckOut", "politicaCancelacion");
+                "fotos", "horaCheckIn", "horaCheckOut", "politicaCancelacion", "revisionGaleria", "editorFotografico");
 
         String revision = mvc.perform(get(RUTA).header("Authorization", admin)).andReturn().getResponse().getHeader("ETag");
         almacen.guardarPublico("hotel/00000000-0000-0000-0000-000000000001.jpg", new byte[]{1}, "image/jpeg");

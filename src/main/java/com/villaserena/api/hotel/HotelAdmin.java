@@ -17,4 +17,8 @@ public record HotelAdmin(
         String horaCheckIn,
         String horaCheckOut,
         String politicaCancelacion) {
+    @com.fasterxml.jackson.annotation.JsonProperty("revisionGaleria")
+    public String revisionGaleria() { return GaleriaHotel.revision(fotos); }
+    @com.fasterxml.jackson.annotation.JsonProperty("editorFotografico")
+    public boolean editorFotografico() { return true; }
 }
