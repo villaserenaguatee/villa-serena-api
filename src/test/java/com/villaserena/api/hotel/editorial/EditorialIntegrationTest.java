@@ -70,6 +70,28 @@ class EditorialIntegrationTest {
                 .andExpect(jsonPath("$.elementos[0].destino").value("/#buscar"));
     }
 
+    @Test
+    void recomendacionesSeGuardanOrdenadasSinCambiarCatalogoYPublicacionEsExplicita() throws Exception {
+        String slug = jdbc.queryForObject("SELECT o.slug FROM catalog_offers o JOIN room_types t ON t.id=o.room_type_id WHERE t.status='ACTIVO' AND coalesce((o.content->>'published')::boolean,true) LIMIT 1", String.class);
+        var catalogo = jdbc.queryForList("SELECT * FROM catalog_offers ORDER BY slug");
+        var habitaciones = jdbc.queryForList("SELECT * FROM rooms ORDER BY id");
+        String cuerpo = """
+                {"revision":0,"elementos":[{"id":"estancias.descanso","texto":"Descripción de aventura","nombre":"Aventura","ofertaSlugs":["%s"]}]}
+                """.formatted(slug);
+        guardar("es", cuerpo, 200);
+        assertThat(jdbc.queryForList("SELECT * FROM catalog_offers ORDER BY slug")).isEqualTo(catalogo);
+        mvc.perform(get(ADMIN + "es").header("Authorization", admin)).andExpect(status().isOk()).andExpect(jsonPath("$.elementos[0].ofertaSlugs[0]").value(slug));
+        mvc.perform(get(PUBLICO + "es")).andExpect(status().isNotFound());
+        publicar("es", 1, 200);
+        mvc.perform(get(PUBLICO + "es")).andExpect(status().isOk()).andExpect(jsonPath("$.elementos[0].nombre").value("Aventura"));
+        guardar("es", cuerpo.replace("revision\":0", "revision\":1"), 200);
+        jdbc.update("UPDATE catalog_offers SET content=jsonb_set(content,'{published}','false'::jsonb,true) WHERE slug=?", slug);
+        publicar("es", 2, 400);
+        mvc.perform(get(PUBLICO + "es")).andExpect(status().isOk()).andExpect(jsonPath("$.revision").value(1));
+        assertThat(jdbc.queryForList("SELECT * FROM rooms ORDER BY id")).isEqualTo(habitaciones);
+        assertThat(catalogo).isNotEmpty();
+    }
+
     private String token(String correo) {
         return transacciones.execute(s -> "Bearer " + tokens.emitirParaEmpleado(empleados.findByCorreoIgnoreCase(correo).orElseThrow()).accessToken());
     }
