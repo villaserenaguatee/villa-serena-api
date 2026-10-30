@@ -29,6 +29,7 @@ public class ImagenesService {
 
     /** Prefijo de las fotos de tipos de habitación en el bucket público (servidas por CDN). */
     public static final String PREFIJO_TIPOS = "tipos/";
+    public static final String PREFIJO_HABITACIONES = "habitaciones/";
 
     /** Prefijo de las fotos del menú en el bucket público (servidas por CDN). */
     public static final String PREFIJO_MENU = "menu/";
@@ -45,7 +46,7 @@ public class ImagenesService {
 
     public ImagenSubida subir(UsoImagen uso, byte[] contenido) {
         String rol = com.villaserena.api.auth.UsuarioActual.rol();
-        if (uso == UsoImagen.TIPO_HABITACION || uso == UsoImagen.MENU || uso == UsoImagen.HOTEL) {
+        if (uso == UsoImagen.TIPO_HABITACION || uso == UsoImagen.HABITACION || uso == UsoImagen.MENU || uso == UsoImagen.HOTEL) {
             if (!"ADMIN".equals(rol)) {
                 throw new ApiException(HttpStatus.FORBIDDEN, "ACCESO_DENEGADO",
                         "Solo el administrador puede subir fotos del catálogo.");
@@ -88,6 +89,9 @@ public class ImagenesService {
             }
         } else if (uso == UsoImagen.TIPO_HABITACION) {
             clave = PREFIJO_TIPOS + UUID.randomUUID() + extension;
+            almacen.guardarPublico(clave, contenido, tipo);
+        } else if (uso == UsoImagen.HABITACION) {
+            clave = PREFIJO_HABITACIONES + UUID.randomUUID() + extension;
             almacen.guardarPublico(clave, contenido, tipo);
         } else if (uso == UsoImagen.MENU) {
             clave = PREFIJO_MENU + UUID.randomUUID() + extension;
