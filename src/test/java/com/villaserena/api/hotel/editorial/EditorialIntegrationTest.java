@@ -79,6 +79,7 @@ class EditorialIntegrationTest {
                 {"revision":0,"elementos":[{"id":"estancias.descanso","texto":"Descripción de aventura","nombre":"Aventura","ofertaSlugs":["%s"]}]}
                 """.formatted(slug);
         guardar("es", cuerpo, 200);
+        assertThat(jdbc.queryForList("SELECT * FROM catalog_offers ORDER BY slug")).isEqualTo(catalogo);
         mvc.perform(get(ADMIN + "es").header("Authorization", admin)).andExpect(status().isOk()).andExpect(jsonPath("$.elementos[0].ofertaSlugs[0]").value(slug));
         mvc.perform(get(PUBLICO + "es")).andExpect(status().isNotFound());
         publicar("es", 1, 200);
