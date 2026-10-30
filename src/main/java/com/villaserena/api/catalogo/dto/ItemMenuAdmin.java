@@ -13,5 +13,6 @@ public record ItemMenuAdmin(
         BigDecimal precio,
         String fotoClave,
         String disponibilidad,
-        String estado
+        String estado,
+        String fotoUrl
 ) {}

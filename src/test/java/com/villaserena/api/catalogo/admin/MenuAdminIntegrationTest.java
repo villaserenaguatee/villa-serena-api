@@ -173,6 +173,7 @@ class MenuAdminIntegrationTest {
                 .andExpect(jsonPath("$.precio").value(65.50))
                 .andExpect(jsonPath("$.categoriaId").value(categoriaId))
                 .andExpect(jsonPath("$.fotoClave").value(fotoClave))
+                .andExpect(jsonPath("$.fotoUrl").isString())
                 .andExpect(jsonPath("$.disponibilidad").value("DISPONIBLE"))
                 .andExpect(jsonPath("$.estado").value("ACTIVO"))
                 .andReturn().getResponse().getContentAsString();
