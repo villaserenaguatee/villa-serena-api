@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 
 import org.springframework.dao.EmptyResultDataAccessException;
+import com.villaserena.api.config.PropiedadesVillaSerena;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,10 +26,16 @@ public class MenuAdminService {
 
     private final JdbcTemplate jdbc;
     private final AlmacenArchivos almacen;
+    private final String urlPublica;
 
-    public MenuAdminService(JdbcTemplate jdbc, AlmacenArchivos almacen) {
+    public MenuAdminService(JdbcTemplate jdbc, AlmacenArchivos almacen, PropiedadesVillaSerena propiedades) {
         this.jdbc = jdbc;
         this.almacen = almacen;
+        this.urlPublica = propiedades.archivos().urlPublica().replaceAll("/+$", "");
+    }
+
+    private String fotoUrl(String clave) {
+        return clave == null || clave.isBlank() ? null : urlPublica + "/" + clave;
     }
 
     public List<CategoriaMenu> listarCategorias() {
@@ -93,7 +100,7 @@ public class MenuAdminService {
                         rs.getBigDecimal("precio"),
                         rs.getString("fotoClave"),
                         rs.getString("disponibilidad"),
-                        rs.getString("estado")),
+                        rs.getString("estado"), fotoUrl(rs.getString("fotoClave"))),
                 params.toArray());
     }
 
@@ -115,7 +122,7 @@ public class MenuAdminService {
                             rs.getBigDecimal("precio"),
                             rs.getString("fotoClave"),
                             rs.getString("disponibilidad"),
-                            rs.getString("estado")),
+                            rs.getString("estado"), fotoUrl(rs.getString("fotoClave"))),
                     id);
         } catch (EmptyResultDataAccessException e) {
             throw ApiException.noEncontrado();
