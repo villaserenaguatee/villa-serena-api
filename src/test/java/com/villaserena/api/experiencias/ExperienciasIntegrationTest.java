@@ -26,6 +26,7 @@ import com.villaserena.api.reservas.*;
 class ExperienciasIntegrationTest {
  @Autowired MockMvc mvc; @Autowired JdbcTemplate db; @Autowired TokenService tokens; @Autowired EmpleadoRepository employees; @Autowired ReservaService stays; @Autowired TransactionTemplate tx;
  @Autowired RelojFijoConfig.RelojPrueba clock;
+ @Autowired jakarta.persistence.EntityManager entityManager;
  String admin,staff,guest,other,code,code2;long amenity,experience,slot;Instant start;LocalDate arrival;
  static final String ADMIN="/api/v1/admin/experiencias",STAFF="/api/v1/experiencias";
  @BeforeEach void setup() throws Exception {
@@ -63,6 +64,7 @@ class ExperienciasIntegrationTest {
   change("APROBACION","POR_PERSONA","CUENTA",25,true,true);
   write(root(code)+"/reservas",guest,body(UUID.randomUUID(),1),409);
   db.update("UPDATE reservations SET status='EN_ESTADIA' WHERE code=?",code);
+  entityManager.clear();
   long booked=id(write(root(code)+"/reservas",guest,body(UUID.randomUUID(),2),200));assertThat(db.queryForObject("SELECT charge_id FROM experience_bookings WHERE id=?",Long.class,booked)).isNull();
   write(STAFF+"/reservas/"+booked+"/decision",staff,"{\"version\":9,\"accion\":\"APROBAR\"}",409);
   String approved=write(STAFF+"/reservas/"+booked+"/decision",staff,"{\"version\":0,\"accion\":\"APROBAR\"}",200);long charge=((Number)JsonPath.read(approved,"$.cargoId")).longValue();
@@ -90,6 +92,6 @@ class ExperienciasIntegrationTest {
    var tasks=new ArrayList<Future<Integer>>();for(String lodging:List.of(code,code2))tasks.add(executor.submit(()->{ready.countDown();start.await(10,TimeUnit.SECONDS);return mvc.perform(post(root(lodging)+"/reservas").header("Authorization",guest).contentType(MediaType.APPLICATION_JSON).content(body(UUID.randomUUID(),1))).andReturn().getResponse().getStatus();}));
    assertThat(ready.await(10,TimeUnit.SECONDS)).isTrue();start.countDown();assertThat(List.of(tasks.get(0).get(20,TimeUnit.SECONDS),tasks.get(1).get(20,TimeUnit.SECONDS))).containsExactlyInAnyOrder(200,409);
    assertThat(db.queryForObject("SELECT sum(people) FROM experience_bookings WHERE slot_id=?",Integer.class,slot)).isEqualTo(1);
-  }finally{db.update("DELETE FROM experience_bookings WHERE slot_id=?",slot);db.update("DELETE FROM experience_slots WHERE experience_id=?",experience);db.update("DELETE FROM experiences WHERE id=?",experience);db.update("DELETE FROM hotel_amenities WHERE id=?",amenity);}
+  }finally{db.update("DELETE FROM experience_bookings WHERE slot_id=?",slot);db.update("DELETE FROM experience_slots WHERE experience_id=?",experience);db.update("DELETE FROM experiences WHERE id=?",experience);db.update("DELETE FROM hotel_amenities WHERE id=?",amenity);for(String lodging:List.of(code,code2)){long rid=db.queryForObject("SELECT id FROM reservations WHERE code=?",Long.class,lodging);db.update("DELETE FROM charges WHERE account_id IN (SELECT id FROM accounts WHERE reservation_id=?)",rid);db.update("DELETE FROM accounts WHERE reservation_id=?",rid);db.update("DELETE FROM reservation_nights WHERE reservation_id=?",rid);db.update("DELETE FROM reservations WHERE id=?",rid);}}
  }
 }
