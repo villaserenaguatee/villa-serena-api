@@ -120,7 +120,7 @@ public class PagoOnlineService {
         }
 
         PasarelaPagos.Sesion sesion = pasarela.crearSesion(
-                "Reserva " + reserva.getCodigo() + " — Hotel Villa Serena",
+                "Reserva Villa Serena · " + reserva.getCodigo(),
                 reserva.getTotal(),
                 webUrl + "/reserva/resultado?codigo=" + reserva.getCodigo(),
                 vencimientoPago(reserva),

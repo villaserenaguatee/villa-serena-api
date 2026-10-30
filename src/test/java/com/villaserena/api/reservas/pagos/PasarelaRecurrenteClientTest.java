@@ -19,6 +19,8 @@ import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -43,7 +45,8 @@ class PasarelaRecurrenteClientTest {
         servidor = MockRestServiceServer.bindTo(builder).build();
         cliente = new PasarelaRecurrenteClient(new PropiedadesVillaSerena.Recurrente(
                 "pk_test_ficticia", "sk_test_ficticia", SECRETO, "villaserena://pago-resultado"),
-                builder.build(), JsonMapper.builder().build(), Clock.fixed(AHORA, ZoneOffset.UTC));
+                builder.build(), JsonMapper.builder().build(), Clock.fixed(AHORA, ZoneOffset.UTC),
+                "https://hotel.test/villa-serena-logo.png");
     }
 
     @AfterEach
@@ -51,19 +54,22 @@ class PasarelaRecurrenteClientTest {
         servidor.verify();
     }
 
-    @Test
-    void creaCheckoutEnGtqConMontoExactoYVencimiento() {
+    @ParameterizedTest
+    @CsvSource({"VS-PRUEBA,1912.50,191250", "VS-OTRA,850.00,85000"})
+    void creaCheckoutEnGtqConMontoExactoYVencimiento(String codigo, String monto, int centavos) {
         servidor.expect(requestTo("https://app.recurrente.com/api/checkouts"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("X-SECRET-KEY", "sk_test_ficticia"))
-                .andExpect(jsonPath("$.items[0].amount_in_cents").value(191250))
+                .andExpect(jsonPath("$.items[0].name").value("Reserva Villa Serena · " + codigo))
+                .andExpect(jsonPath("$.items[0].image_url").value("https://hotel.test/villa-serena-logo.png"))
+                .andExpect(jsonPath("$.items[0].amount_in_cents").value(centavos))
                 .andExpect(jsonPath("$.items[0].currency").value("GTQ"))
                 .andExpect(jsonPath("$.items[0].payment_method_types[0]").value("card"))
                 .andExpect(jsonPath("$.expires_at").value("2026-10-18T18:30:00Z"))
-                .andExpect(jsonPath("$.metadata.codigoReserva").value("VS-PRUEBA"))
+                .andExpect(jsonPath("$.metadata.codigoReserva").value(codigo))
                 .andRespond(withSuccess(checkout("unpaid"), MediaType.APPLICATION_JSON));
-        var sesion = cliente.crearSesion("Reserva VS-PRUEBA", new BigDecimal("1912.50"),
-                "https://hotel.test/resultado", AHORA.plusSeconds(1800), Map.of("codigoReserva", "VS-PRUEBA"));
+        var sesion = cliente.crearSesion("Reserva Villa Serena · " + codigo, new BigDecimal(monto),
+                "https://hotel.test/resultado", AHORA.plusSeconds(1800), Map.of("codigoReserva", codigo));
         assertThat(sesion.id()).isEqualTo("ch_prueba");
         assertThat(sesion.abierta()).isTrue();
         assertThat(sesion.url()).isEqualTo("https://app.recurrente.com/checkout-session/ch_prueba");

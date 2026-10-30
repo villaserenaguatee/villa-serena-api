@@ -34,18 +34,21 @@ public class PasarelaRecurrenteClient implements PasarelaPagos {
     private final RestClient cliente;
     private final ObjectMapper json;
     private final Clock reloj;
+    private final String logoUrl;
 
     @org.springframework.beans.factory.annotation.Autowired
     public PasarelaRecurrenteClient(PropiedadesVillaSerena propiedades, ObjectMapper json, Clock reloj) {
-        this(propiedades.recurrente(), clienteReal(), json, reloj);
+        this(propiedades.recurrente(), clienteReal(), json, reloj,
+                propiedades.webUrl().replaceAll("/+$", "") + "/villa-serena-logo.png");
     }
 
     PasarelaRecurrenteClient(PropiedadesVillaSerena.Recurrente config, RestClient cliente,
-            ObjectMapper json, Clock reloj) {
+            ObjectMapper json, Clock reloj, String logoUrl) {
         this.config = config;
         this.cliente = cliente;
         this.json = json;
         this.reloj = reloj;
+        this.logoUrl = logoUrl;
     }
 
     private static RestClient clienteReal() {
@@ -60,7 +63,7 @@ public class PasarelaRecurrenteClient implements PasarelaPagos {
             Map<String, String> metadata) {
         var item = Map.of("name", descripcion, "amount_in_cents", centavos(monto), "currency", "GTQ",
                 "quantity", 1, "charge_type", "one_time", "payment_method_types", List.of("card"),
-                "available_installments", List.of());
+                "available_installments", List.of(), "image_url", logoUrl);
         return mapear(solicitar(HttpMethod.POST, "/checkouts", Map.of("items", List.of(item),
                 "success_url", urlRetorno, "cancel_url", urlRetorno, "expires_at", expiraEn.toString(),
                 "metadata", metadata), null));
