@@ -25,19 +25,22 @@ import com.villaserena.api.reservas.*;
 @SpringBootTest @AutoConfigureMockMvc @Import({TestcontainersConfiguration.class,RelojFijoConfig.class}) @ActiveProfiles("test") @Transactional
 class ExperienciasIntegrationTest {
  @Autowired MockMvc mvc; @Autowired JdbcTemplate db; @Autowired TokenService tokens; @Autowired EmpleadoRepository employees; @Autowired ReservaService stays; @Autowired TransactionTemplate tx;
- String admin,staff,guest,other,code,code2;long amenity,experience,slot;
+ @Autowired RelojFijoConfig.RelojPrueba clock;
+ String admin,staff,guest,other,code,code2;long amenity,experience,slot;Instant start;LocalDate arrival;
  static final String ADMIN="/api/v1/admin/experiencias",STAFF="/api/v1/experiencias";
  @BeforeEach void setup() throws Exception {
+  clock.fijar(Instant.now());arrival=LocalDate.now(clock).plusDays(5);start=arrival.plusDays(1).atTime(10,0).atZone(ZoneId.of("America/Guatemala")).toInstant();
   admin=token("sofia.morales@villaserena.test");staff=token("ana.perez@villaserena.test");
   long guestId=createGuest(),employee=db.queryForObject("SELECT id FROM employees WHERE email='ana.perez@villaserena.test'",Long.class),type=db.queryForObject("SELECT id FROM room_types WHERE name='Doble Superior'",Long.class);
   long otherId=createGuest();
   guest=tx.execute(s->"Bearer "+tokens.emitirParaHuesped(guestId).accessToken());other=tx.execute(s->"Bearer "+tokens.emitirParaHuesped(otherId).accessToken());
-  code=tx.execute(s->stays.crear(SolicitudReserva.recepcion(guestId,type,LocalDate.parse("2026-11-02"),LocalDate.parse("2026-11-05"),1,null,employee)).getCodigo());
-  code2=tx.execute(s->stays.crear(SolicitudReserva.recepcion(guestId,type,LocalDate.parse("2026-11-02"),LocalDate.parse("2026-11-05"),1,null,employee)).getCodigo());
+  code=tx.execute(s->stays.crear(SolicitudReserva.recepcion(guestId,type,arrival,arrival.plusDays(3),1,null,employee)).getCodigo());
+  code2=tx.execute(s->stays.crear(SolicitudReserva.recepcion(guestId,type,arrival,arrival.plusDays(3),1,null,employee)).getCodigo());
   amenity=db.queryForObject("INSERT INTO hotel_amenities(name,description,schedule,location,sort_order,status) VALUES('Experiencia de prueba','','','',0,'ACTIVO') RETURNING id",Long.class);
   experience=id(write(ADMIN,admin,config("INMEDIATA","GRATUITA","SIN_CARGO",0,false,true),200));
-  slot=id(write(ADMIN+"/"+experience+"/horarios",admin,"{\"inicio\":\"2026-11-03T16:00:00Z\",\"capacidad\":2,\"activo\":true,\"version\":0}",200));
+  slot=id(write(ADMIN+"/"+experience+"/horarios",admin,"{\"inicio\":\""+start+"\",\"capacidad\":2,\"activo\":true,\"version\":0}",200));
  }
+ @AfterEach void resetClock(){clock.reiniciar();}
  long createGuest(){return db.queryForObject("INSERT INTO guests(full_name,email,phone,nationality,document_type,document_number) VALUES('Huésped de prueba',?,'+502 5555 1234','Guatemalteca','DPI',?) RETURNING id",Long.class,UUID.randomUUID()+"@example.test",String.format("%013d",(UUID.randomUUID().getLeastSignificantBits()&Long.MAX_VALUE)%10000000000000L));}
  String token(String email){return tx.execute(s->"Bearer "+tokens.emitirParaEmpleado(employees.findByCorreoIgnoreCase(email).orElseThrow()).accessToken());}
  String root(String c){return "/api/v1/app/reservas/"+c+"/experiencias";}
@@ -70,8 +73,8 @@ class ExperienciasIntegrationTest {
  }
  @Test void cancelacionRestringidaEInactivosFechasYRevisiones()throws Exception{
   change("INMEDIATA","GRATUITA","SIN_CARGO",0,false,false);long b=id(write(root(code)+"/reservas",guest,body(UUID.randomUUID(),1),200));write(root(code)+"/reservas/"+b+"/cancelar",guest,"{\"version\":0,\"motivo\":\"Prueba\"}",409);
-  mvc.perform(get(root(code)+"/"+experience+"/disponibilidad").param("fecha","2026-11-04").header("Authorization",guest)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
-  mvc.perform(put(ADMIN+"/"+experience+"/horarios/"+slot).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"inicio\":\"2026-11-03T16:00:00Z\",\"capacidad\":1,\"activo\":true}")).andExpect(status().isOk());
+  mvc.perform(get(root(code)+"/"+experience+"/disponibilidad").param("fecha",arrival.plusDays(2).toString()).header("Authorization",guest)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+  mvc.perform(put(ADMIN+"/"+experience+"/horarios/"+slot).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"inicio\":\""+start+"\",\"capacidad\":1,\"activo\":true}")).andExpect(status().isOk());
   db.update("UPDATE hotel_amenities SET status='INACTIVO' WHERE id=?",amenity);write(root(code2)+"/reservas",guest,body(UUID.randomUUID(),1),409);
   db.update("UPDATE reservations SET status='FINALIZADA' WHERE code=?",code);write(root(code)+"/reservas",guest,body(UUID.randomUUID(),1),409);
  }
