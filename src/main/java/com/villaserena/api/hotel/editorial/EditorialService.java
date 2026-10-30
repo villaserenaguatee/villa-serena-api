@@ -119,6 +119,21 @@ public class EditorialService {
         for (var elemento : elementos) {
             String id = elemento.id();
             if (!CatalogoEditorial.IDS.contains(id)) throw invalido("El elemento seleccionado no admite edición editorial.");
+            if (elemento.nombre() != null || elemento.ofertaSlugs() != null) {
+                if (!Set.of("estancias.romantica", "estancias.descanso", "estancias.familiar", "estancias.negocios", "estancias.bienestar").contains(id))
+                    throw invalido("Este elemento no admite recomendaciones de estancia.");
+                String nombre = elemento.nombre();
+                if (nombre != null && (nombre.isBlank() || nombre.length() > 80 || nombre.contains("<") || nombre.contains(">") || nombre.codePoints().anyMatch(Character::isISOControl)))
+                    throw invalido("Introduce un nombre válido de hasta 80 caracteres.");
+                var ofertas = elemento.ofertaSlugs();
+                if (ofertas != null) {
+                    if (ofertas.size() > 3 || ofertas.stream().distinct().count() != ofertas.size()) throw invalido("Selecciona hasta tres habitaciones diferentes.");
+                    for (String slug : ofertas) {
+                        if (slug == null || slug.isBlank() || slug.length() > 100 || !Boolean.TRUE.equals(jdbc.queryForObject("SELECT EXISTS(SELECT 1 FROM catalog_offers o JOIN room_types t ON t.id=o.room_type_id WHERE o.slug=? AND t.status='ACTIVO' AND coalesce((o.content->>'published')::boolean,true))", Boolean.class, slug)))
+                            throw invalido("Una habitación recomendada ya no está disponible en el catálogo público.");
+                    }
+                }
+            }
             if (id.endsWith(".imagen") || id.endsWith(".imagenes")) {
                 var claves = elemento.fotoClaves() != null ? elemento.fotoClaves()
                         : elemento.fotoClave() != null ? List.of(elemento.fotoClave()) : null;
