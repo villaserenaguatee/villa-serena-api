@@ -78,7 +78,7 @@ public class CuentaService {
      * nunca el alojamiento. El cargo queda visible como ANULADO y deja de sumar.
      */
     @Transactional
-    public CargoCuentaRecepcion anularCargo(String codigo, long cargoId, String motivo, long empleadoId) {
+    public CargoCuentaRecepcion anularCargo(String codigo, long cargoId, String motivo, Long empleadoId) {
         Cuenta cuenta = cuentaDe(codigo);
         Cargo cargo = cargos.findById(cargoId)
                 .filter(c -> c.getCuentaId().equals(cuenta.getId()))
