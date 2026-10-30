@@ -69,7 +69,13 @@ class ExperienciasIntegrationTest {
   write(STAFF+"/reservas/"+booked+"/decision",staff,"{\"version\":9,\"accion\":\"APROBAR\"}",409);
   String approved=write(STAFF+"/reservas/"+booked+"/decision",staff,"{\"version\":0,\"accion\":\"APROBAR\"}",200);long charge=((Number)JsonPath.read(approved,"$.cargoId")).longValue();
   write(STAFF+"/reservas/"+booked+"/decision",staff,"{\"version\":0,\"accion\":\"APROBAR\"}",200);assertThat(db.queryForObject("SELECT total FROM charges WHERE id=?",java.math.BigDecimal.class,charge)).isEqualByComparingTo("50.00");
-  String cancel="{\"version\":1,\"motivo\":\"Cambio de planes\"}";write(root(code)+"/reservas/"+booked+"/cancelar",guest,cancel,200);write(root(code)+"/reservas/"+booked+"/cancelar",guest,cancel,200);
+  String cancel="{\"version\":1,\"motivo\":\"Cambio de planes\"}";
+  db.update("UPDATE accounts SET status='CERRADA' WHERE reservation_id=(SELECT id FROM reservations WHERE code=?)",code);
+  write(root(code)+"/reservas/"+booked+"/cancelar",guest,cancel,409);
+  assertThat(db.queryForObject("SELECT status FROM experience_bookings WHERE id=?",String.class,booked)).isEqualTo("CONFIRMADA");
+  assertThat(db.queryForObject("SELECT status FROM charges WHERE id=?",String.class,charge)).isEqualTo("VIGENTE");
+  db.update("UPDATE accounts SET status='ABIERTA' WHERE reservation_id=(SELECT id FROM reservations WHERE code=?)",code);
+  write(root(code)+"/reservas/"+booked+"/cancelar",guest,cancel,200);write(root(code)+"/reservas/"+booked+"/cancelar",guest,cancel,200);
   assertThat(db.queryForObject("SELECT status FROM charges WHERE id=?",String.class,charge)).isEqualTo("ANULADO");
   long next=id(write(root(code)+"/reservas",guest,body(UUID.randomUUID(),1),200));write(STAFF+"/reservas/"+next+"/decision",staff,"{\"version\":0,\"accion\":\"RECHAZAR\"}",409);write(STAFF+"/reservas/"+next+"/decision",staff,"{\"version\":0,\"accion\":\"RECHAZAR\",\"motivo\":\"No disponible\"}",200);
  }
