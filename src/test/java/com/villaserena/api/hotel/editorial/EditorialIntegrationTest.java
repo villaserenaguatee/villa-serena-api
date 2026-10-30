@@ -63,7 +63,7 @@ class EditorialIntegrationTest {
         mvc.perform(get(ADMIN + "es").header("Authorization", admin)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.elementos[0].destino").value("/#buscar"));
         mvc.perform(get(PUBLICO + "es")).andExpect(status().isNotFound());
-        publicar("es", 0, 409);
+        publicar("es", 2, 409);
         publicar("es", 1, 200);
         mvc.perform(get(PUBLICO + "es")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.elementos[0].texto").value("Buscar mi estancia"))
