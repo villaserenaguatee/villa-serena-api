@@ -29,8 +29,8 @@ class ExperienciasIntegrationTest {
  static final String ADMIN="/api/v1/admin/experiencias",STAFF="/api/v1/experiencias";
  @BeforeEach void setup() throws Exception {
   admin=token("sofia.morales@villaserena.test");staff=token("ana.perez@villaserena.test");
-  long guestId=db.queryForObject("SELECT id FROM guests ORDER BY id LIMIT 1",Long.class),employee=db.queryForObject("SELECT id FROM employees WHERE email='ana.perez@villaserena.test'",Long.class),type=db.queryForObject("SELECT id FROM room_types WHERE name='Doble Superior'",Long.class);
-  long otherId=db.queryForObject("SELECT id FROM guests WHERE id<>? ORDER BY id LIMIT 1",Long.class,guestId);
+  long guestId=createGuest(),employee=db.queryForObject("SELECT id FROM employees WHERE email='ana.perez@villaserena.test'",Long.class),type=db.queryForObject("SELECT id FROM room_types WHERE name='Doble Superior'",Long.class);
+  long otherId=createGuest();
   guest=tx.execute(s->"Bearer "+tokens.emitirParaHuesped(guestId).accessToken());other=tx.execute(s->"Bearer "+tokens.emitirParaHuesped(otherId).accessToken());
   code=tx.execute(s->stays.crear(SolicitudReserva.recepcion(guestId,type,LocalDate.parse("2026-11-02"),LocalDate.parse("2026-11-05"),1,null,employee)).getCodigo());
   code2=tx.execute(s->stays.crear(SolicitudReserva.recepcion(guestId,type,LocalDate.parse("2026-11-02"),LocalDate.parse("2026-11-05"),1,null,employee)).getCodigo());
@@ -38,6 +38,7 @@ class ExperienciasIntegrationTest {
   experience=id(write(ADMIN,admin,config("INMEDIATA","GRATUITA","SIN_CARGO",0,false,true),200));
   slot=id(write(ADMIN+"/"+experience+"/horarios",admin,"{\"inicio\":\"2026-11-03T16:00:00Z\",\"capacidad\":2,\"activo\":true,\"version\":0}",200));
  }
+ long createGuest(){return db.queryForObject("INSERT INTO guests(full_name,email,phone,nationality,document_type,document_number) VALUES('Huésped de prueba',?,'+502 5555 1234','Guatemalteca','DPI',?) RETURNING id",Long.class,UUID.randomUUID()+"@example.test",String.format("%013d",(UUID.randomUUID().getLeastSignificantBits()&Long.MAX_VALUE)%10000000000000L));}
  String token(String email){return tx.execute(s->"Bearer "+tokens.emitirParaEmpleado(employees.findByCorreoIgnoreCase(email).orElseThrow()).accessToken());}
  String root(String c){return "/api/v1/app/reservas/"+c+"/experiencias";}
  String config(String mode,String pricing,String payment,int price,boolean stay,boolean cancel){return """
