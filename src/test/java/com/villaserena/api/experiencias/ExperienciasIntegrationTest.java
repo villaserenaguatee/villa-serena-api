@@ -92,6 +92,16 @@ class ExperienciasIntegrationTest {
   write(STAFF+"/consultas/"+inquiry+"/respuesta",guest,"{\"respuesta\":\"Prueba\"}",403);write(STAFF+"/consultas/"+inquiry+"/respuesta",staff,"{\"respuesta\":\"Coordine su anticipo con Recepción\"}",200);
   mvc.perform(get(root(code)+"/consultas").header("Authorization",guest)).andExpect(status().isOk()).andExpect(jsonPath("$[0].estado").value("RESPONDIDA"));assertThat(db.queryForObject("SELECT count(*) FROM experience_bookings WHERE slot_id=?",Integer.class,slot)).isZero();
  }
+ @Test void plazoDeCancelacionYCambiosDeHorarioRespetanLasReservasExistentes()throws Exception{
+  long booked=id(write(root(code)+"/reservas",guest,body(UUID.randomUUID(),2),200));
+  mvc.perform(put(ADMIN+"/"+experience+"/horarios/"+slot).header("Authorization",admin).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0,\"inicio\":\""+start+"\",\"capacidad\":1,\"activo\":true}")).andExpect(status().isConflict());
+  write(ADMIN+"/"+experience+"/horarios",admin,"{\"version\":0,\"inicio\":\""+start.plusSeconds(1800)+"\",\"capacidad\":2,\"activo\":true}",409);
+  mvc.perform(get(root(code)+"/reservas").header("Authorization",guest)).andExpect(jsonPath("$[0].cancelable").value(true));
+  clock.fijar(start.minusSeconds(3600));
+  mvc.perform(get(root(code)+"/reservas").header("Authorization",guest)).andExpect(jsonPath("$[0].cancelable").value(false));
+  write(root(code)+"/reservas/"+booked+"/cancelar",guest,"{\"version\":0,\"motivo\":\"Fuera de plazo\"}",409);
+  assertThat(db.queryForObject("SELECT status FROM experience_bookings WHERE id=?",String.class,booked)).isEqualTo("CONFIRMADA");
+ }
  @Test @Transactional(propagation=Propagation.NOT_SUPPORTED) void dosSolicitudesSimultaneasNoSuperanElUltimoCupo()throws Exception{
   db.update("UPDATE experience_slots SET capacity=1 WHERE id=?",slot);var ready=new CountDownLatch(2);var start=new CountDownLatch(1);
   try(var executor=Executors.newFixedThreadPool(2)){
