@@ -55,6 +55,21 @@ class EditorialIntegrationTest {
         recepcion = token("ana.perez@villaserena.test");
     }
 
+    @Test
+    void botonConservaBusquedaEnBorradorYPublicaSoloConConfirmacionDeRevision() throws Exception {
+        guardar("es", """
+                {"revision":0,"elementos":[{"id":"inicio.boton","texto":"Buscar mi estancia","destino":"/#buscar"}]}
+                """, 200);
+        mvc.perform(get(ADMIN + "es").header("Authorization", admin)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.elementos[0].destino").value("/#buscar"));
+        mvc.perform(get(PUBLICO + "es")).andExpect(status().isNotFound());
+        publicar("es", 0, 409);
+        publicar("es", 1, 200);
+        mvc.perform(get(PUBLICO + "es")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.elementos[0].texto").value("Buscar mi estancia"))
+                .andExpect(jsonPath("$.elementos[0].destino").value("/#buscar"));
+    }
+
     private String token(String correo) {
         return transacciones.execute(s -> "Bearer " + tokens.emitirParaEmpleado(empleados.findByCorreoIgnoreCase(correo).orElseThrow()).accessToken());
     }
