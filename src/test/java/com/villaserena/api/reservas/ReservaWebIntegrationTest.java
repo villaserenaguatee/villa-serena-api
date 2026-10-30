@@ -377,6 +377,11 @@ class ReservaWebIntegrationTest {
         mvc.perform(post("/api/v1/publico/reservas/{codigo}/pago", codigo))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.urlPago").value("https://app.recurrente.com/checkout-session/" + sesionId));
+        org.mockito.Mockito.verify(pasarela).crearSesion(
+                org.mockito.ArgumentMatchers.eq("Reserva Villa Serena · " + codigo),
+                org.mockito.ArgumentMatchers.argThat(monto -> monto.compareTo(reservas.findByCodigo(codigo).orElseThrow().getTotal()) == 0),
+                org.mockito.ArgumentMatchers.endsWith("/reserva/resultado?codigo=" + codigo),
+                any(), org.mockito.ArgumentMatchers.eq(java.util.Map.of("codigoReserva", codigo, "tipoPago", "RESERVA")));
         return codigo;
     }
 
