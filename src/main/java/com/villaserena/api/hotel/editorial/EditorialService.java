@@ -23,7 +23,7 @@ public class EditorialService {
     private final ObjectMapper json;
     private final AlmacenArchivos almacen;
     private final String urlPublica;
-    private static final Set<String> DESTINOS = Set.of("/catalogo", "/nosotros", "/reservar/habitaciones", "/#habitaciones", "/#servicios", "/#contacto");
+    private static final Set<String> DESTINOS = Set.of("/catalogo", "/nosotros", "/reservar/habitaciones", "/#habitaciones", "/#servicios", "/#contacto", "/#buscar");
 
     public EditorialService(JdbcTemplate jdbc, ObjectMapper json, AlmacenArchivos almacen, PropiedadesVillaSerena propiedades) {
         this.jdbc = jdbc;
