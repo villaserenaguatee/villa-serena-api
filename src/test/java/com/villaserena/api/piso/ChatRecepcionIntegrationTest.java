@@ -69,4 +69,15 @@ class ChatRecepcionIntegrationTest {
   mvc.perform(delete(path()+"/"+id).header("Authorization",staff).contentType(MediaType.APPLICATION_JSON).content("{\"version\":0}")).andExpect(status().isConflict());
   assertThat(db.queryForObject("SELECT text FROM stay_messages WHERE id=?",String.class,id)).isEqualTo("Mensaje propio");
  }
+ @Test void preferenciasSonPersonalesPersistentesYNoBorranMensajes()throws Exception{
+  long id=send(guestPath(),guest,"Mensaje por leer");String preferences="/api/v1/estancias/chat-preferencias",change="/api/v1/estancias/"+code+"/chat-preferencias";
+  mvc.perform(get(preferences).header("Authorization",staff)).andExpect(status().isOk()).andExpect(jsonPath("$[?(@.codigo=='"+code+"')].noLeidos").value(org.hamcrest.Matchers.contains(1)));
+  for(String payload:new String[]{"{\"accion\":\"favorita\",\"valor\":true}","{\"accion\":\"archivada\",\"valor\":true}","{\"accion\":\"leido\",\"hasta\":"+id+"}"})mvc.perform(post(change).header("Authorization",staff).contentType(MediaType.APPLICATION_JSON).content(payload)).andExpect(status().isOk());
+  mvc.perform(get(preferences).header("Authorization",token("ana.perez@villaserena.test"))).andExpect(jsonPath("$[?(@.codigo=='"+code+"')].favorita").value(org.hamcrest.Matchers.contains(true))).andExpect(jsonPath("$[?(@.codigo=='"+code+"')].archivada").value(org.hamcrest.Matchers.contains(true))).andExpect(jsonPath("$[?(@.codigo=='"+code+"')].noLeidos").value(org.hamcrest.Matchers.contains(0)));
+  mvc.perform(get(preferences).header("Authorization",other)).andExpect(jsonPath("$[?(@.codigo=='"+code+"')].favorita").value(org.hamcrest.Matchers.contains(false))).andExpect(jsonPath("$[?(@.codigo=='"+code+"')].noLeidos").value(org.hamcrest.Matchers.contains(1)));
+  mvc.perform(post(change).header("Authorization",staff).contentType(MediaType.APPLICATION_JSON).content("{\"accion\":\"eliminar\"}")).andExpect(status().isOk());
+  assertThat(db.queryForObject("SELECT count(*) FROM stay_messages WHERE id=?",Integer.class,id)).isEqualTo(1);
+  mvc.perform(get(preferences).header("Authorization",guest)).andExpect(status().isForbidden());mvc.perform(post(change).header("Authorization",guest).contentType(MediaType.APPLICATION_JSON).content("{\"accion\":\"favorita\",\"valor\":true}")).andExpect(status().isForbidden());
+  mvc.perform(post(change).header("Authorization",staff).contentType(MediaType.APPLICATION_JSON).content("{\"accion\":\"archivada\"}")).andExpect(status().isBadRequest());
+ }
 }
