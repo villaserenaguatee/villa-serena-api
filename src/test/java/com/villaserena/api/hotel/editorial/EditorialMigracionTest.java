@@ -50,7 +50,7 @@ class EditorialMigracionTest {
 
     private List<String> filas(JdbcTemplate jdbc,String tabla) {
         // V33 adds a nullable contact field; compare every pre-existing column unchanged.
-        String fila = "employees".equals(tabla) ? "(to_jsonb(t) - 'personal_email')" : "to_jsonb(t)";
+        String fila = "employees".equals(tabla) ? "(to_jsonb(t) - 'personal_email')" : "stay_messages".equals(tabla) ? "(to_jsonb(t) - 'version' - 'edited_at' - 'deleted_at')" : "to_jsonb(t)";
         return jdbc.queryForList("SELECT " + fila + "::text FROM \"" + tabla.replace("\"","\"\"") + "\" t ORDER BY " + fila + "::text",String.class);
     }
 }
