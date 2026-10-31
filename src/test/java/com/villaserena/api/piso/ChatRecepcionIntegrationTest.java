@@ -80,4 +80,10 @@ class ChatRecepcionIntegrationTest {
   mvc.perform(get(preferences).header("Authorization",guest)).andExpect(status().isForbidden());mvc.perform(post(change).header("Authorization",guest).contentType(MediaType.APPLICATION_JSON).content("{\"accion\":\"favorita\",\"valor\":true}")).andExpect(status().isForbidden());
   mvc.perform(post(change).header("Authorization",staff).contentType(MediaType.APPLICATION_JSON).content("{\"accion\":\"archivada\"}")).andExpect(status().isBadRequest());
  }
+ @Test void deleteSinCuerpoConservaCompatibilidadConLaWebPublicadaSinAmpliarPermisos()throws Exception{
+  long id=send(path(),staff,"Mensaje compatible");
+  mvc.perform(delete(path()+"/"+id).header("Authorization",other)).andExpect(status().isForbidden());
+  mvc.perform(delete(path()+"/"+id).header("Authorization",staff)).andExpect(status().isOk()).andExpect(jsonPath("$.eliminado").value(true));
+  assertThat(db.queryForObject("SELECT text FROM stay_messages WHERE id=?",String.class,id)).isEqualTo("Mensaje compatible");
+ }
 }
