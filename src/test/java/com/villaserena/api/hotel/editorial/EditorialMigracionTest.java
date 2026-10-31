@@ -35,7 +35,7 @@ class EditorialMigracionTest {
             var flyway = Flyway.configure().dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
                     .locations("classpath:db/migration").load();
             var migracion = flyway.migrate();
-            assertThat(migracion.migrationsExecuted).isEqualTo(5);
+            assertThat(migracion.migrationsExecuted).isEqualTo(6);
             assertThat(migracion.migrations).extracting(resultado -> resultado.version).containsExactly("33", "34", "35", "36", "37", "38");
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             assertThat(jdbc.queryForObject("SELECT count(*) FROM employees WHERE personal_email IS NOT NULL", Long.class)).isZero();
