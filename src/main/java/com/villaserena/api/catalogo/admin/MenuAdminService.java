@@ -73,6 +73,10 @@ public class MenuAdminService {
             throw ApiException.datosInvalidos("Completa ambas horas o deja las dos vacías.",
                     List.of(new DetalleError("horaInicio", "Se requieren inicio y fin juntos.")));
         }
+        if (p.horaInicio() != null && !p.horaInicio().isBefore(p.horaFin())) {
+            throw ApiException.datosInvalidos("La hora inicial debe ser anterior a la hora final.",
+                    List.of(new DetalleError("horaFin", "La hora final debe ser posterior a la inicial.")));
+        }
         return p.franja() == null ? "OTROS" : p.franja();
     }
 
