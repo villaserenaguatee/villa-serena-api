@@ -41,8 +41,8 @@ public class MenuAdminService {
     public List<CategoriaMenu> listarCategorias() {
         sincronizarCategoriasSiEsNecesario();
         return jdbc.query(
-                "SELECT id, name AS \"nombre\" FROM menu_categories ORDER BY id",
-                (rs, i) -> new CategoriaMenu(rs.getLong("id"), rs.getString("nombre")));
+                "SELECT id, name AS \"nombre\", franja, hora_inicio, hora_fin FROM menu_categories ORDER BY id",
+                (rs, i) -> new CategoriaMenu(rs.getLong("id"), rs.getString("nombre"), rs.getString("franja"), rs.getTime("hora_inicio") == null ? null : rs.getTime("hora_inicio").toLocalTime(), rs.getTime("hora_fin") == null ? null : rs.getTime("hora_fin").toLocalTime()));
     }
 
     @Transactional
@@ -51,9 +51,9 @@ public class MenuAdminService {
         validarNombreCategoriaUnico(nombre, null);
 
         Long id = jdbc.queryForObject(
-                "INSERT INTO menu_categories(name) VALUES (?) RETURNING id",
-                Long.class, nombre);
-        return new CategoriaMenu(id, nombre);
+                "INSERT INTO menu_categories(name, franja, hora_inicio, hora_fin) VALUES (?, ?, ?, ?) RETURNING id",
+                Long.class, nombre, franja(peticion), peticion.horaInicio(), peticion.horaFin());
+        return new CategoriaMenu(id, nombre, franja(peticion), peticion.horaInicio(), peticion.horaFin());
     }
 
     @Transactional
@@ -62,10 +62,22 @@ public class MenuAdminService {
         String nombre = peticion.nombre().trim();
         validarNombreCategoriaUnico(nombre, id);
 
-        jdbc.update("UPDATE menu_categories SET name = ? WHERE id = ?", nombre, id);
+        jdbc.update("UPDATE menu_categories SET name = ?, franja = ?, hora_inicio = ?, hora_fin = ? WHERE id = ?", nombre, franja(peticion), peticion.horaInicio(), peticion.horaFin(), id);
         jdbc.update("UPDATE menu_items SET category = ? WHERE category_id = ?", nombre, id);
 
-        return new CategoriaMenu(id, nombre);
+        return new CategoriaMenu(id, nombre, franja(peticion), peticion.horaInicio(), peticion.horaFin());
+    }
+
+    private String franja(CategoriaMenuPeticion p) {
+        if ((p.horaInicio() == null) != (p.horaFin() == null)) {
+            throw ApiException.datosInvalidos("Completa ambas horas o deja las dos vacías.",
+                    List.of(new DetalleError("horaInicio", "Se requieren inicio y fin juntos.")));
+        }
+        if (p.horaInicio() != null && !p.horaInicio().isBefore(p.horaFin())) {
+            throw ApiException.datosInvalidos("La hora inicial debe ser anterior a la hora final.",
+                    List.of(new DetalleError("horaFin", "La hora final debe ser posterior a la inicial.")));
+        }
+        return p.franja() == null ? "OTROS" : p.franja();
     }
 
     public List<ItemMenuAdmin> listarItems(Long categoriaId, String estado) {
