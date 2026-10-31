@@ -30,8 +30,11 @@ public class EstanciaComunicacionController {
  private long id(Map<String,Object> r){return ((Number)r.get("id")).longValue();}
  private ApiException invalid(String text){return ApiException.datosInvalidos(text,List.of());}
  private static final String CHAT="/api/v1/app/reservas/{codigo}/chat", STAFFCHAT="/api/v1/estancias/{codigo}/chat";
- @GetMapping({CHAT,STAFFCHAT}) public List<Map<String,Object>> mensajes(@PathVariable String codigo){var r=reserva(codigo,false);return jdbc.queryForList("SELECT id,author AS \"autor\",text AS \"texto\",created_at AS \"creadoEn\"  FROM stay_messages WHERE reservation_id=? ORDER BY id",id(r));}
- @PostMapping({CHAT,STAFFCHAT}) @Transactional public Map<String,Object> enviar(@PathVariable String codigo,@Valid @RequestBody Mensaje p){
+ @GetMapping(CHAT) public List<Map<String,Object>> mensajes(@PathVariable String codigo){var r=reserva(codigo,false);return jdbc.queryForList("SELECT id,author AS \"autor\",CASE WHEN deleted_at IS NULL THEN text ELSE '' END AS \"texto\",created_at AS \"creadoEn\",version,deleted_at IS NOT NULL AS \"eliminado\",edited_at AS \"editadoEn\",false AS \"puedeModificar\" FROM stay_messages WHERE reservation_id=? ORDER BY id",id(r));}
+ @PostMapping(STAFFCHAT) @PreAuthorize("hasRole('RECEPCION')") @Transactional
+ @io.swagger.v3.oas.annotations.Operation(operationId="enviarMensajeChatRecepcion")
+ public Map<String,Object> enviarRecepcion(@PathVariable String codigo,@Valid @RequestBody Mensaje p){return enviar(codigo,p);}
+ @PostMapping(CHAT) @PreAuthorize("hasRole('HUESPED')") @Transactional public Map<String,Object> enviar(@PathVariable String codigo,@Valid @RequestBody Mensaje p){
   var r=reserva(codigo,true);String autor=guest()?"HUESPED":"RECEPCION";
   var prior=jdbc.queryForList("SELECT id,text AS \"texto\" FROM stay_messages WHERE reservation_id=? AND author=? AND author_id=? AND key=?",id(r),autor,UsuarioActual.id(),p.clave());
   if(!prior.isEmpty()){if(!prior.getFirst().get("texto").equals(p.texto().trim()))throw ApiException.conflicto("CLAVE_REUTILIZADA","El identificador ya corresponde a otro mensaje.");return prior.getFirst();}
