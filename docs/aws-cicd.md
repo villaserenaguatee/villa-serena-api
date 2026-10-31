@@ -37,6 +37,7 @@ deployment uses `docker compose -p villa-serena-api ... up -d --no-deps api`.
 - Docker image is ARM64 for EC2 Graviton.
 - Images are tagged by commit SHA for traceable deployments.
 - CI uses the Maven wrapper with Java 21.
+- CI/CD security gates and Sonar configuration: [SEGURIDAD_CI.md](SEGURIDAD_CI.md).
 - CD currently uses `workflow_dispatch`, not push-to-main auto deploy.
   Turn on automatic deployment **only after** successful end-to-end test.
 - EC2 exposes only host TCP 8080 to the API Gateway VPC Link security group.

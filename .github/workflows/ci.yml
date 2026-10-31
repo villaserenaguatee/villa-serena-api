@@ -1,6 +1,10 @@
 name: API CI
 
 on:
+  workflow_call:
+    secrets:
+      SONAR_TOKEN:
+        required: true
   pull_request:
     branches: [main, develop, dev]
   push:
@@ -12,8 +16,11 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -58,6 +65,7 @@ jobs:
           docker compose --env-file .env.dev -f compose.dev.yml config --quiet
           docker compose --env-file .env.prod -f compose.prod.yml config --quiet
       - name: Maven verify
+        id: maven
         run: |
           chmod +x mvnw
           ./mvnw -B verify
@@ -71,4 +79,88 @@ jobs:
           path: |
             target/openapi-spring.json
             target/contract-comparison.json
+          if-no-files-found: warn
+      - name: Trivy Maven dependencies
+        if: ${{ !cancelled() && steps.maven.outcome == 'success' }}
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          scan-type: fs
+          scan-ref: pom.xml
+          trivy-config: trivy.yaml
+          output: target/trivy-dependencies.json
+      - name: Sonar analysis and Quality Gate
+        if: >-
+          ${{ !cancelled() && steps.maven.outcome == 'success' &&
+              (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+               github.base_ref == github.event.repository.default_branch) &&
+              (github.event_name != 'pull_request' ||
+               github.event.pull_request.head.repo.full_name == github.repository) &&
+              github.actor != 'dependabot[bot]' }}
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+        run: |
+          : "${SONAR_TOKEN:?Configure the SONAR_TOKEN repository secret}"
+          : "${SONAR_HOST_URL:?Configure the SONAR_HOST_URL repository variable}"
+          : "${SONAR_PROJECT_KEY:?Configure the SONAR_PROJECT_KEY repository variable}"
+          test -s target/site/jacoco/jacoco.xml
+          args=("-Dsonar.host.url=$SONAR_HOST_URL" "-Dsonar.projectKey=$SONAR_PROJECT_KEY")
+          if [ -n "$SONAR_ORGANIZATION" ]; then
+            args+=("-Dsonar.organization=$SONAR_ORGANIZATION")
+          fi
+          ./mvnw -B sonar:sonar "${args[@]}" \
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml \
+            -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=300
+      - name: Explain Sonar omission for untrusted PRs
+        if: >-
+          ${{ github.event_name == 'pull_request' &&
+              (github.event.pull_request.head.repo.full_name != github.repository ||
+               github.actor == 'dependabot[bot]') }}
+        run: echo '::warning::Sonar requires secrets unavailable to fork/Dependabot PRs. See docs/SEGURIDAD_CI.md for the required trusted-branch analysis.'
+      - name: Explain Sonar Free branch scope
+        if: >-
+          ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) &&
+              github.base_ref != github.event.repository.default_branch }}
+        run: echo '::notice::Sonar Free analyzes the GitHub default branch and PRs targeting it. Tests and Trivy still run on integration branches.'
+      - name: Attach dependency scan and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-security-and-coverage
+          path: |
+            target/trivy-dependencies.json
+            target/site/jacoco/
+          if-no-files-found: warn
+
+  container-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build production Dockerfile for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: villa-serena-api:scan
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Trivy production image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.1
+          image-ref: villa-serena-api:scan
+          trivy-config: trivy.yaml
+          output: trivy-image.json
+      - name: Attach container scan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-container-security
+          path: trivy-image.json
           if-no-files-found: warn
