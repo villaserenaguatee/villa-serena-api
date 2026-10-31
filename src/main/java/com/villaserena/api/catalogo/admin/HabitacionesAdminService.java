@@ -5,6 +5,12 @@ import java.util.List;
 import java.util.Locale;
 
 import org.springframework.dao.EmptyResultDataAccessException;
+import com.villaserena.api.archivos.AlmacenArchivos;
+import com.villaserena.api.config.PropiedadesVillaSerena;
+import com.villaserena.api.catalogo.dto.FotosHabitacionRespuesta;
+import com.villaserena.api.catalogo.dto.FotoCatalogo;
+import com.villaserena.api.catalogo.dto.FotosTipoPeticion;
+import com.villaserena.api.catalogo.dto.FotoTipoPeticion;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,9 +26,13 @@ import com.villaserena.api.comun.DetalleError;
 public class HabitacionesAdminService {
 
     private final JdbcTemplate jdbc;
+    private final AlmacenArchivos almacen;
+    private final PropiedadesVillaSerena propiedades;
 
-    public HabitacionesAdminService(JdbcTemplate jdbc) {
+    public HabitacionesAdminService(JdbcTemplate jdbc, AlmacenArchivos almacen, PropiedadesVillaSerena propiedades) {
         this.jdbc = jdbc;
+        this.almacen = almacen;
+        this.propiedades = propiedades;
     }
 
     public List<HabitacionAdmin> listar(String estado, Long tipoHabitacionId) {
@@ -118,6 +128,37 @@ public class HabitacionesAdminService {
         jdbc.update("UPDATE rooms SET status = ?, version = version + 1 WHERE id = ?",
                 peticion.estado().toUpperCase(Locale.ROOT), id);
         return obtener(id);
+    }
+
+    public FotosHabitacionRespuesta fotos(long id) {
+        obtener(id);
+        var fotos = jdbc.query("SELECT object_key,is_primary,sort_order FROM room_photos WHERE room_id=? ORDER BY sort_order",
+            (rs,i)->new FotoCatalogo(rs.getString("object_key"),
+                propiedades.archivos().urlPublica().replaceAll("/+$","")+"/"+rs.getString("object_key"),
+                rs.getBoolean("is_primary"), rs.getInt("sort_order")),id);
+        return new FotosHabitacionRespuesta(id,fotos);
+    }
+
+    @Transactional
+    public FotosHabitacionRespuesta actualizarFotos(long id, FotosTipoPeticion request) {
+        obtener(id);
+        var fotos=request.fotos();
+        if(fotos==null || fotos.isEmpty() || fotos.size()>30 || fotos.stream().filter(FotoTipoPeticion::principal).count()!=1)
+            throw ApiException.datosInvalidos("La galería requiere entre 1 y 30 fotografías y una principal.",
+                List.of(new DetalleError("fotos","Selecciona una foto principal.")));
+        var keys=new java.util.HashSet<String>();
+        var orders=new java.util.HashSet<Integer>();
+        for(var foto:fotos) {
+            if(foto.clave()==null || !foto.clave().startsWith("habitaciones/") ||
+                 !(foto.clave().endsWith(".jpg")||foto.clave().endsWith(".png")) ||
+                 !keys.add(foto.clave()) || !orders.add(foto.orden()) || !almacen.existePublico(foto.clave()))
+                throw ApiException.datosInvalidos("Fotografía de habitación inválida.",
+                    List.of(new DetalleError("fotos","Verifica las fotografías de esta habitación.")));
+        }
+        jdbc.update("DELETE FROM room_photos WHERE room_id=?",id);
+        for(var foto:fotos) jdbc.update("INSERT INTO room_photos(room_id,object_key,is_primary,sort_order) VALUES(?,?,?,?)",
+            id,foto.clave(),foto.principal(),foto.orden());
+        return fotos(id);
     }
 
     private void validarTipoActivo(long tipoId) {

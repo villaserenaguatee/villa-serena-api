@@ -35,13 +35,14 @@ class EditorialMigracionTest {
             var flyway = Flyway.configure().dataSource(postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword())
                     .locations("classpath:db/migration").load();
             var migracion = flyway.migrate();
-            assertThat(migracion.migrationsExecuted).isEqualTo(5);
-            assertThat(migracion.migrations).extracting(resultado -> resultado.version).containsExactly("33", "34", "35", "36", "37");
+            assertThat(migracion.migrationsExecuted).isEqualTo(6);
+            assertThat(migracion.migrations).extracting(resultado -> resultado.version).containsExactly("33", "34", "35", "36", "37", "38");
             assertThat(flyway.migrate().migrationsExecuted).isZero();
             assertThat(jdbc.queryForObject("SELECT count(*) FROM employees WHERE personal_email IS NOT NULL", Long.class)).isZero();
             for (String tabla : tablas) assertThat(filas(jdbc,tabla)).as("Datos anteriores de %s",tabla).isEqualTo(anteriores.get(tabla));
             assertThat(filas(jdbc,"hotel_editorial_drafts")).isEmpty();
             assertThat(filas(jdbc,"hotel_editorial_publications")).isEmpty();
+            assertThat(filas(jdbc,"room_photos")).isEmpty();
             for (String tabla : List.of("experiences", "experience_slots", "experience_bookings", "experience_inquiries"))
                 assertThat(filas(jdbc,tabla)).as("Sin datos ficticios en %s",tabla).isEmpty();
         }

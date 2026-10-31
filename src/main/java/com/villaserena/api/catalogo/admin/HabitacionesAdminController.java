@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,6 +22,8 @@ import com.villaserena.api.catalogo.dto.CrearHabitacionPeticion;
 import com.villaserena.api.catalogo.dto.EditarHabitacionPeticion;
 import com.villaserena.api.catalogo.dto.EstadoCatalogoPeticion;
 import com.villaserena.api.catalogo.dto.HabitacionAdmin;
+import com.villaserena.api.catalogo.dto.FotosHabitacionRespuesta;
+import com.villaserena.api.catalogo.dto.FotosTipoPeticion;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -57,6 +60,12 @@ public class HabitacionesAdminController {
                 UsuarioActual.id(), creada.id(), creada.numero(), creada.tipoHabitacionId());
         return creada;
     }
+
+    @GetMapping("/{id}/fotos")
+    public FotosHabitacionRespuesta fotos(@PathVariable long id) { return service.fotos(id); }
+
+    @PutMapping("/{id}/fotos")
+    public FotosHabitacionRespuesta actualizarFotos(@PathVariable long id, @Valid @RequestBody FotosTipoPeticion peticion) { return service.actualizarFotos(id, peticion); }
 
     @GetMapping("/{id}")
     @Operation(operationId = "detalleHabitacionAdmin", summary = "Consultar habitación")
