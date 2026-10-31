@@ -13,4 +13,8 @@ public record CategoriaMenuPeticion(
         @Pattern(regexp = "DESAYUNO|ALMUERZO|CENA|BEBIDAS|OTROS") String franja,
         LocalTime horaInicio,
         LocalTime horaFin
-) {}
+) {
+    public CategoriaMenuPeticion(String nombre) {
+        this(nombre, "OTROS", null, null);
+    }
+}
