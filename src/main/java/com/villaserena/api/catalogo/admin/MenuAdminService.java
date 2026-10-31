@@ -65,7 +65,7 @@ public class MenuAdminService {
         jdbc.update("UPDATE menu_categories SET name = ?, franja = ?, hora_inicio = ?, hora_fin = ? WHERE id = ?", nombre, franja(peticion), peticion.horaInicio(), peticion.horaFin(), id);
         jdbc.update("UPDATE menu_items SET category = ? WHERE category_id = ?", nombre, id);
 
-        return new CategoriaMenu(id, nombre);
+        return new CategoriaMenu(id, nombre, franja(peticion), peticion.horaInicio(), peticion.horaFin());
     }
 
     private String franja(CategoriaMenuPeticion p) {
